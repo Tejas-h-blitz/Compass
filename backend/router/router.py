@@ -57,34 +57,44 @@ def classify_query(query: str) -> str:
     # Rule 3: Ambiguous queries -> hybrid path
     return "hybrid"
 
-def route_and_search(query: str, limit: int = 10, hybrid_weight: float = 0.5) -> Dict[str, Any]:
+def route_and_search(
+    query: str, 
+    limit: int = 10, 
+    hybrid_weight: float = 0.5, 
+    personalize: bool = True,
+    force_strategy: str = None
+) -> Dict[str, Any]:
     """
-    Routes query, executes retrieval, merges results if hybrid, logs choice and performance.
+    Routes query, executes retrieval, merges results if hybrid, applies personalization,
+    logs choice and performance, and slices to final limit.
     """
     start_time = time.perf_counter()
     
-    # 1. Classify query
-    strategy = classify_query(query)
+    # 1. Classify query or use forced strategy
+    strategy = force_strategy if force_strategy else classify_query(query)
     
+    # If personalizing, we retrieve more candidates so that files with high access
+    # rates can boost/bubble up from lower base positions into the top list.
+    candidate_limit = limit * 2 if personalize else limit
     results = []
     
     # 2. Execute retrieval based on selected strategy
     if strategy == "keyword":
-        results = keyword_search(query, limit=limit)
+        results = keyword_search(query, limit=candidate_limit)
         # Add explanations
         for r in results:
             r["explanation"] = f"Matched via FTS5 keyword search on filename or exact text content (score: {r['score']:.2f})."
             
     elif strategy == "semantic":
-        results = semantic_search(query, limit=limit)
+        results = semantic_search(query, limit=candidate_limit)
         # Add explanations
         for r in results:
             r["explanation"] = f"Matched concept/meaning via local semantic search (similarity: {r['score']:.2f})."
             
     elif strategy == "hybrid":
         # Run both paths (expanding retrieve window for better merge pool)
-        kw_results = keyword_search(query, limit=limit * 2)
-        sem_results = semantic_search(query, limit=limit * 2)
+        kw_results = keyword_search(query, limit=candidate_limit)
+        sem_results = semantic_search(query, limit=candidate_limit)
         
         # Merge results using weight parameter (default 50/50)
         # S_hybrid = w * S_kw + (1 - w) * S_sem
@@ -117,7 +127,7 @@ def route_and_search(query: str, limit: int = 10, hybrid_weight: float = 0.5) ->
                     "sources": {"semantic"}
                 }
                 
-        # Calculate final merged scores and sort
+        # Calculate final merged scores
         for filepath, match in merged_matches.items():
             kw_score = match["kw_score"]
             sem_score = match["sem_score"]
@@ -149,13 +159,41 @@ def route_and_search(query: str, limit: int = 10, hybrid_weight: float = 0.5) ->
                 
             results.append(doc)
             
-        # Sort merged list by score descending
-        results.sort(key=lambda x: x["score"], reverse=True)
-        results = results[:limit]
+    # 3. Apply personalization boost if enabled
+    if personalize:
+        from backend.search.personalize import get_access_history, calculate_personalization_boost
+        history, max_count = get_access_history()
         
+        for r in results:
+            base_score = r["score"]
+            # Compute boost details based on frequency and recency decay
+            p_boost = calculate_personalization_boost(r["filepath"], history, max_count)
+            personal_score = p_boost["personal_score"]
+            
+            # Blend: S_final = 0.85 * S_base + 0.15 * S_personalization
+            # Cold-start consideration: files with zero access history are not buried,
+            # they are just scaled down by 15%, ensuring discoverability.
+            final_score = (0.85 * base_score) + (0.15 * personal_score)
+            r["score"] = round(final_score, 4)
+            
+            base_explanation = r["explanation"]
+            if p_boost["count"] > 0:
+                r["explanation"] = (
+                    f"{base_explanation} [Personalized Boost: +{0.15 * personal_score:.2f} "
+                    f"(base: {base_score:.2f}, opens: {p_boost['count']}, last accessed: {p_boost['days_ago']} days ago)]."
+                )
+            else:
+                r["explanation"] = (
+                    f"{base_explanation} [Personalized: Cold-start (base score scaled to {final_score:.2f})]."
+                )
+                
+    # 4. Sort and slice to final limit
+    results.sort(key=lambda x: x["score"], reverse=True)
+    results = results[:limit]
+    
     latency_ms = (time.perf_counter() - start_time) * 1000
     
-    # 3. Log query decision for objective evaluation
+    # 5. Log query decision for objective evaluation
     log_query_decision(
         query=query,
         strategy=strategy,

@@ -1,0 +1,152 @@
+[
+  {
+    "query": "doc1_python_intro.txt",
+    "expected_files": ["doc1_python_intro.txt"],
+    "type": "keyword"
+  },
+  {
+    "query": "doc2_search_strategies.docx",
+    "expected_files": ["doc2_search_strategies.docx"],
+    "type": "keyword"
+  },
+  {
+    "query": "doc3_dummy_test.pdf",
+    "expected_files": ["doc3_dummy_test.pdf"],
+    "type": "keyword"
+  },
+  {
+    "query": "python intro",
+    "expected_files": ["doc1_python_intro.txt"],
+    "type": "keyword"
+  },
+  {
+    "query": "strategies docx",
+    "expected_files": ["doc2_search_strategies.docx"],
+    "type": "keyword"
+  },
+  {
+    "query": "dummy pdf",
+    "expected_files": ["doc3_dummy_test.pdf"],
+    "type": "keyword"
+  },
+  {
+    "query": "python language",
+    "expected_files": ["doc1_python_intro.txt"],
+    "type": "keyword"
+  },
+  {
+    "query": "retrieval strategies",
+    "expected_files": ["doc2_search_strategies.docx"],
+    "type": "keyword"
+  },
+  {
+    "query": "dummy test",
+    "expected_files": ["doc3_dummy_test.pdf"],
+    "type": "keyword"
+  },
+  {
+    "query": "Compass indexing",
+    "expected_files": ["doc1_python_intro.txt"],
+    "type": "keyword"
+  },
+  {
+    "query": "that thing about python programming",
+    "expected_files": ["doc1_python_intro.txt"],
+    "type": "semantic"
+  },
+  {
+    "query": "something about search strategies",
+    "expected_files": ["doc2_search_strategies.docx"],
+    "type": "semantic"
+  },
+  {
+    "query": "i remember high-level interpreted programming language",
+    "expected_files": ["doc1_python_intro.txt"],
+    "type": "semantic"
+  },
+  {
+    "query": "details about TF-IDF or BM25",
+    "expected_files": ["doc2_search_strategies.docx"],
+    "type": "semantic"
+  },
+  {
+    "query": "looking for cosine similarity vector matches",
+    "expected_files": ["doc2_search_strategies.docx"],
+    "type": "semantic"
+  },
+  {
+    "query": "concept of readability in coding",
+    "expected_files": ["doc1_python_intro.txt"],
+    "type": "semantic"
+  },
+  {
+    "query": "find documents discussing web development and agentic AI",
+    "expected_files": ["doc1_python_intro.txt"],
+    "type": "semantic"
+  },
+  {
+    "query": "idea behind hybrid search algorithms",
+    "expected_files": ["doc2_search_strategies.docx"],
+    "type": "semantic"
+  },
+  {
+    "query": "details about dummy test file",
+    "expected_files": ["doc3_dummy_test.pdf"],
+    "type": "semantic"
+  },
+  {
+    "query": "concept of high-dimensional vectors",
+    "expected_files": ["doc2_search_strategies.docx"],
+    "type": "semantic"
+  },
+  {
+    "query": "introduction to python programming",
+    "expected_files": ["doc1_python_intro.txt"],
+    "type": "hybrid"
+  },
+  {
+    "query": "modern search systems and retrieval paths",
+    "expected_files": ["doc2_search_strategies.docx"],
+    "type": "hybrid"
+  },
+  {
+    "query": "testing indexing systems with plain text files",
+    "expected_files": ["doc1_python_intro.txt"],
+    "type": "hybrid"
+  },
+  {
+    "query": "cheap keyword search and expensive semantic paths",
+    "expected_files": ["doc2_search_strategies.docx"],
+    "type": "hybrid"
+  },
+  {
+    "query": "interpreting code and building applications",
+    "expected_files": ["doc1_python_intro.txt"],
+    "type": "hybrid"
+  },
+  {
+    "query": "matching exact tokens using word counts",
+    "expected_files": ["doc2_search_strategies.docx"],
+    "type": "hybrid"
+  },
+  {
+    "query": "dummy file for testing indexing software",
+    "expected_files": ["doc3_dummy_test.pdf"],
+    "type": "hybrid"
+  },
+  {
+    "query": "python code execution and libraries",
+    "expected_files": ["doc1_python_intro.txt"],
+    "type": "hybrid"
+  },
+  {
+    "query": "information retrieval algorithms and models",
+    "expected_files": ["doc2_search_strategies.docx"],
+    "type": "hybrid"
+  },
+  {
+    "query": "agentic ai systems and readability",
+    "expected_files": ["doc1_python_intro.txt"],
+    "type": "hybrid"
+  }
+]

@@ -78,6 +78,11 @@ def scan_file(filepath: str, force: bool = False) -> bool:
     if file_type not in all_supported:
         return False
         
+    # Skip files larger than 10MB to avoid high CPU/memory consumption and potential crashes
+    if file_size > 10 * 1024 * 1024:
+        logger.warning(f"Skipping file {filename}: size exceeds 10MB limit ({file_size} bytes)")
+        return False
+        
     # Check if the file is already indexed and whether it has been modified.
     # This is a critical optimization preventing redundant heavy text extraction
     # and embedding computations for thousands of unchanged files.
@@ -145,7 +150,12 @@ def scan_directory(directory_path: str, force: bool = False) -> Dict[str, int]:
     found_filepaths = set()
     
     # 1. Walk directory and index/update files
-    for root, _, files in os.walk(directory_path):
+    for root, dirs, files in os.walk(directory_path):
+        # In-place modify dirs to avoid scanning hidden or heavy developer folders
+        dirs[:] = [d for d in dirs if d not in {
+            '.git', 'node_modules', '.venv', 'venv', '__pycache__', 
+            'env', '.next', 'dist', 'build', '.idea', '.vscode'
+        }]
         for file in files:
             filepath = os.path.join(root, file)
             normalized_path = os.path.abspath(filepath)
