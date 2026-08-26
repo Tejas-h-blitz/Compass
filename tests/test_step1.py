@@ -16,6 +16,22 @@ def main():
     
     # 1. Initialize Database
     print("\n[1/5] Initializing SQLite database...")
+    from backend.models.db import DB_PATH
+    if os.path.exists(DB_PATH):
+        try:
+            os.remove(DB_PATH)
+        except Exception as e:
+            print(f"Could not remove DB file: {e}")
+            
+    # Also reset ChromaDB directory to prevent state pollution
+    from backend.search.semantic_search import CHROMA_DIR
+    import shutil
+    if os.path.exists(CHROMA_DIR):
+        try:
+            shutil.rmtree(CHROMA_DIR)
+        except Exception as e:
+            print(f"Could not remove ChromaDB directory: {e}")
+
     init_db()
     
     conn = get_db_connection()
