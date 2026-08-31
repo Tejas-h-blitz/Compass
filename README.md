@@ -8,7 +8,7 @@
 Compass is a state-of-the-art **Agentic Desktop Search Application** designed to organize, index, and query your local workspace files with speed and relevance. Combining local semantic search with traditional SQLite FTS5 keyword indexing, Compass routes your queries dynamically and personalizes search results based on your file access patterns (frequency and recency).
 
 ---
-
+ 
 ## 🏗️ Architecture Overview
  
 Compass operates on a dual-engine local indexing architecture to achieve high-performance retrieval and relevant rank merging.
