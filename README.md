@@ -10,7 +10,7 @@ Compass is a state-of-the-art **Agentic Desktop Search Application** designed to
 ---
  
 ## 🏗️ Architecture Overview
- 
+  
 Compass operates on a dual-engine local indexing architecture to achieve high-performance retrieval and relevant rank merging.
 
 ```mermaid
