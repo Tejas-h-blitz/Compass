@@ -176,15 +176,20 @@ def route_and_search(
             final_score = (0.85 * base_score) + (0.15 * personal_score)
             r["score"] = round(final_score, 4)
             
+            r["base_score"] = round(base_score, 4)
+            r["personal_score"] = round(personal_score, 4)
+            
             base_explanation = r["explanation"]
             if p_boost["count"] > 0:
+                delta = final_score - base_score
+                sign = "+" if delta >= 0 else ""
                 r["explanation"] = (
-                    f"{base_explanation} [Personalized Boost: +{0.15 * personal_score:.2f} "
-                    f"(base: {base_score:.2f}, opens: {p_boost['count']}, last accessed: {p_boost['days_ago']} days ago)]."
+                    f"{base_explanation} [Personalized Boost: {sign}{delta:.2f} "
+                    f"(blend: 0.85*{base_score:.2f} + 0.15*{personal_score:.2f}, opens: {p_boost['count']}, last accessed: {p_boost['days_ago']} days ago)]."
                 )
             else:
                 r["explanation"] = (
-                    f"{base_explanation} [Personalized: Cold-start (base score scaled to {final_score:.2f})]."
+                    f"{base_explanation} [Personalized: Cold-start (0.85 * base {base_score:.2f} = {final_score:.2f})]."
                 )
                 
     # 4. Sort and slice to final limit

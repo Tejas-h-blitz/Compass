@@ -8,8 +8,12 @@ def run_test_script(script_path: Path) -> bool:
     print(f"RUNNING TEST STEP: {script_path.name}")
     print(f"==================================================")
     
-    # Run test using the same Python interpreter
-    result = subprocess.run([sys.executable, str(script_path)], capture_output=False)
+    # Run test using the same Python interpreter with thread safety
+    env = os.environ.copy()
+    env.setdefault("OPENBLAS_NUM_THREADS", "1")
+    env.setdefault("OMP_NUM_THREADS", "1")
+    env.setdefault("MKL_NUM_THREADS", "1")
+    result = subprocess.run([sys.executable, str(script_path)], capture_output=False, env=env)
     
     if result.returncode == 0:
         print(f"\n[PASS] {script_path.name} PASSED")

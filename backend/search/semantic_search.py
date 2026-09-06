@@ -1,5 +1,11 @@
 import os
 import sys
+
+# Prevent OpenBLAS / MKL memory allocation errors on Windows multicore environments
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+
 from typing import Dict, Any, List, Optional
 import chromadb
 from sentence_transformers import SentenceTransformer

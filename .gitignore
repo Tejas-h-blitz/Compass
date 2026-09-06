@@ -1,5 +1,29 @@
+# Virtual Environments
 .venv/
+venv/
+ENV/
+
+# Python Bytecode & Caches
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Compass Local Databases & Indices
 data/compass.db*
 data/chroma/
+
+# Presentation & Local Working Notes
+docs/
+
+# IDE & OS Artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+Thumbs.db
+.DS_Store

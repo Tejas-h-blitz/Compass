@@ -268,7 +268,7 @@ async function executeSearch() {
                 let personalizationBadgeHtml = "";
                 if (hasPersonalization) {
                     // Extract detail strings using regex or parsing from explanation
-                    const matches = r.explanation.match(/Personalized Boost:\s*([+-]\d+\.\d+)\s*\((.*?)\)\]/);
+                    const matches = r.explanation.match(/Personalized Boost:\s*([+-]?\d+\.\d+)\s*\((.*?)\)\]/);
                     const boostDetails = matches ? matches[2] : "boosted";
                     personalizationBadgeHtml = `
                         <div class="personalization-details">
@@ -294,6 +294,10 @@ async function executeSearch() {
                     `;
                 }
                 
+                const isPersonalizedActive = personalizeToggle.checked && r.base_score !== undefined;
+                const scoreLabel = isPersonalizedActive ? "Blended Score" : "Score";
+                const baseScoreSub = isPersonalizedActive ? ` <span style="font-weight: normal; opacity: 0.75;">(Base: ${r.base_score.toFixed(3)})</span>` : "";
+
                 card.innerHTML = `
                     <div class="result-header">
                         <div class="file-info">
@@ -308,7 +312,7 @@ async function executeSearch() {
                     <div class="file-meta-row">
                         <div class="meta-item">Size: <strong>${sizeText}</strong></div>
                         <div class="meta-item">Modified: <strong>${modifiedText}</strong></div>
-                        <div class="meta-item">Base Score: <strong>${r.score.toFixed(3)}</strong></div>
+                        <div class="meta-item">${scoreLabel}: <strong>${r.score.toFixed(3)}</strong>${baseScoreSub}</div>
                     </div>
                     <div class="match-preview">
                         ${r.content_preview}
