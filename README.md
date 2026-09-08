@@ -1,4 +1,4 @@
-# Compass 🧭 - Agentic Desktop Search
+# Compass - Agentic Desktop Search
 
 [![Compass CI](https://github.com/Tejas-h-blitz/Compass/actions/workflows/ci.yml/badge.svg)](https://github.com/Tejas-h-blitz/Compass/actions/workflows/ci.yml)
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
