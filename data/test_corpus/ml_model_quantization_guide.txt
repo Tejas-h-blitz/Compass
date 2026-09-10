@@ -1,0 +1,11 @@
+Deep Learning Model Quantization & Inference Optimization Guide
+===============================================================
+
+Overview:
+Deploying large neural networks in production requires optimizing both memory footprint (VRAM) and compute latency. This document outlines the quantization pipeline from FP32 to INT8 and FP16.
+
+Key Techniques:
+1. Post-Training Quantization (PTQ): Reduces model weight precision using ONNX Runtime with calibration datasets.
+2. NVIDIA TensorRT Acceleration: Leverages specialized Tensor Cores to speed up matrix multiplications.
+3. Dynamic Batching: Groups concurrent user requests within a 5ms window, boosting GPU throughput by 3.8x.
+Result: Model latency dropped from 120ms to 18ms with less than 0.4% loss in perplexity.

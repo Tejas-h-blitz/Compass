@@ -47,10 +47,11 @@ def main():
     
     # 2. Run Scanner on Test Corpus (First Scan)
     print("\n[2/5] Running scanner on test corpus (first run)...")
+    expected_files_count = len([f for f in os.listdir(TEST_CORPUS_DIR) if not f.startswith(".") and os.path.isfile(os.path.join(TEST_CORPUS_DIR, f))])
     stats = scan_directory(TEST_CORPUS_DIR)
     print(f"Scan statistics: {stats}")
-    assert stats["scanned"] == 3, f"Expected 3 files, got {stats['scanned']}"
-    assert stats["updated"] == 3, f"Expected all 3 files to be updated, got {stats['updated']}"
+    assert stats["scanned"] == expected_files_count, f"Expected {expected_files_count} files, got {stats['scanned']}"
+    assert stats["updated"] == expected_files_count, f"Expected all {expected_files_count} files to be updated, got {stats['updated']}"
     assert stats["pruned"] == 0, f"Expected 0 pruned files, got {stats['pruned']}"
     
     # Verify content in database
@@ -82,7 +83,7 @@ def main():
     print("\n[3/5] Running scanner again without file changes...")
     stats2 = scan_directory(TEST_CORPUS_DIR)
     print(f"Scan statistics (second run): {stats2}")
-    assert stats2["scanned"] == 3, f"Expected 3 files, got {stats2['scanned']}"
+    assert stats2["scanned"] == expected_files_count, f"Expected {expected_files_count} files, got {stats2['scanned']}"
     assert stats2["updated"] == 0, f"Expected 0 updated files (cached), got {stats2['updated']}"
     print("Modified-time check caching works successfully!")
     

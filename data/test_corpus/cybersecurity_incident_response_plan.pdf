@@ -1,0 +1,66 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 1179 >>
+stream
+BT
+/F1 14 Tf
+50 740 Td
+(Cybersecurity Incident Response Plan - SOC 2 Standard) Tj
+/F1 10 Tf
+0 -25 Td
+(Document Reference: SEC-POL-2024-V3 | Classification: Internal Confidential) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(1. Purpose & SOC 2 Compliance Framework:) Tj
+0 -16 Td
+(This security manual defines the mandatory protocols for identifying, containing,) Tj
+0 -16 Td
+(and eradicating cybersecurity threats, phishing attempts, and data breach incidents.) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(2. Mandatory Incident Escalation & Response Protocols:) Tj
+0 -16 Td
+(- Immediate Quarantine: Any compromised endpoint or server must be disconnected from the LAN.) Tj
+0 -16 Td
+(- Breach Notification Window: Regulatory bodies and affected clients must be notified within 72 hours.) Tj
+0 -16 Td
+(- Credential & Secret Rotation: All API tokens, SSH keys, and database passwords must be revoked.) Tj
+0 -16 Td
+(- Multi-Factor Authentication: Hardware MFA \(FIDO2 WebAuthn keys\) is mandatory for all access.) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(3. Post-Incident Forensics & Audit Trail:) Tj
+0 -16 Td
+(Security engineers must preserve memory dumps, firewall logs, and audit trails for compliance analysis.) Tj
+0 -16 Td
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1542
+%%EOF
