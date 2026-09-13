@@ -97,6 +97,18 @@ def init_db():
         );
     """)
     
+    # 5. Monitored horizons table
+    # Stores user-approved directories across C: and D: drives for scoped indexing
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS monitored_paths (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            path TEXT UNIQUE NOT NULL,
+            label TEXT,
+            added_at REAL NOT NULL,
+            last_scanned_at REAL
+        );
+    """)
+
     conn.commit()
     conn.close()
 
@@ -230,16 +242,206 @@ def log_file_access(filepath: str):
     """
     Logs when a file is opened, used to compute recommendation frequency & recency.
     """
+    norm_path = os.path.abspath(filepath)
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute("""
             INSERT INTO access_log (filepath, accessed_at)
             VALUES (?, ?)
-        """, (filepath, time.time()))
+        """, (norm_path, time.time()))
         conn.commit()
     except Exception as e:
         conn.rollback()
         print(f"Error logging file access: {e}")
     finally:
         conn.close()
+
+# --- Monitored Horizons (Multi-Directory Management) ---
+
+def add_monitored_path(path: str, label: Optional[str] = None) -> bool:
+    """
+    Registers a new monitored horizon directory path.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    norm_path = os.path.abspath(path)
+    if not label:
+        label = os.path.basename(norm_path) or norm_path
+
+    try:
+        cursor.execute("""
+            INSERT OR IGNORE INTO monitored_paths (path, label, added_at)
+            VALUES (?, ?, ?)
+        """, (norm_path, label, time.time()))
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        conn.rollback()
+        print(f"Error adding monitored path {path}: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_monitored_paths() -> List[Dict[str, Any]]:
+    """
+    Retrieves all user-monitored horizon directories and their file counts.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id, path, label, added_at, last_scanned_at
+            FROM monitored_paths
+            ORDER BY added_at ASC
+        """)
+        rows = cursor.fetchall()
+        horizons = []
+        for row in rows:
+            p = row[1]
+            sep = os.path.sep
+            prefix = p if p.endswith(sep) else p + sep
+            # Count files indexed under this path
+            cursor.execute("SELECT COUNT(*) FROM files WHERE filepath LIKE ? OR filepath = ?", (prefix + "%", p))
+            file_count = cursor.fetchone()[0]
+            horizons.append({
+                "id": row[0],
+                "path": row[1],
+                "label": row[2],
+                "added_at": row[3],
+                "last_scanned_at": row[4],
+                "file_count": file_count
+            })
+        return horizons
+    finally:
+        conn.close()
+
+def remove_monitored_path(path: str, prune_files: bool = True) -> bool:
+    """
+    Removes a monitored horizon directory and optionally prunes its indexed files.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    norm_path = os.path.abspath(path)
+    try:
+        cursor.execute("DELETE FROM monitored_paths WHERE path = ?", (norm_path,))
+        deleted = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+
+        if deleted and prune_files:
+            prune_files_under_path(norm_path)
+        return deleted
+    except Exception as e:
+        print(f"Error removing monitored path {path}: {e}")
+        return False
+
+def update_monitored_path_scanned(path: str):
+    """
+    Updates the last_scanned_at timestamp for a horizon.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    norm_path = os.path.abspath(path)
+    try:
+        cursor.execute("""
+            UPDATE monitored_paths SET last_scanned_at = ? WHERE path = ?
+        """, (time.time(), norm_path))
+        conn.commit()
+    finally:
+        conn.close()
+
+def prune_files_under_path(dir_path: str) -> int:
+    """
+    Removes all indexed files belonging to a specific directory path.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    norm_path = os.path.abspath(dir_path)
+    sep = os.path.sep
+    prefix = norm_path if norm_path.endswith(sep) else norm_path + sep
+
+    try:
+        cursor.execute("SELECT filepath FROM files WHERE filepath LIKE ? OR filepath = ?", (prefix + "%", norm_path))
+        paths = [r[0] for r in cursor.fetchall()]
+        for p in paths:
+            delete_file(p)
+            try:
+                from backend.search.semantic_search import delete_file_embeddings
+                delete_file_embeddings(p)
+            except Exception:
+                pass
+        return len(paths)
+    finally:
+        conn.close()
+
+def get_recent_and_frequent_files(limit: int = 8) -> List[Dict[str, Any]]:
+    """
+    Retrieves candidates for zero-query smart recommendations.
+    Combines:
+    1. Most frequently/recently accessed files from access_log
+    2. Most recently modified files on disk from files table
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Candidate set 1: Files with access history
+        cursor.execute("""
+            SELECT f.filepath, f.filename, f.file_type, f.file_size, f.modified_at, 
+                   COUNT(a.id) as open_count, MAX(a.accessed_at) as last_accessed,
+                   substr(f.content, 1, 140) as preview
+            FROM files f
+            JOIN access_log a ON f.filepath = a.filepath
+            GROUP BY f.filepath
+            ORDER BY last_accessed DESC, open_count DESC
+            LIMIT ?
+        """, (limit,))
+        access_rows = cursor.fetchall()
+        
+        seen_paths = set()
+        candidates = []
+        for r in access_rows:
+            seen_paths.add(r[0])
+            candidates.append({
+                "filepath": r[0],
+                "filename": r[1],
+                "file_type": r[2],
+                "file_size": r[3],
+                "modified_at": r[4],
+                "open_count": r[5],
+                "last_accessed": r[6],
+                "preview": r[7] or "",
+                "source": "access_history"
+            })
+            
+        # Candidate set 2: Recently modified files on disk to discover active files
+        remaining = limit - len(candidates)
+        if remaining > 0:
+            cursor.execute("""
+                SELECT filepath, filename, file_type, file_size, modified_at,
+                       0 as open_count, NULL as last_accessed,
+                       substr(content, 1, 140) as preview
+                FROM files
+                ORDER BY modified_at DESC
+                LIMIT ?
+            """, (limit * 2,))
+            mod_rows = cursor.fetchall()
+            for r in mod_rows:
+                if r[0] not in seen_paths and len(candidates) < limit:
+                    seen_paths.add(r[0])
+                    candidates.append({
+                        "filepath": r[0],
+                        "filename": r[1],
+                        "file_type": r[2],
+                        "file_size": r[3],
+                        "modified_at": r[4],
+                        "open_count": 0,
+                        "last_accessed": None,
+                        "preview": r[7] or "",
+                        "source": "recently_modified"
+                    })
+                    
+        return candidates
+    finally:
+        conn.close()
+

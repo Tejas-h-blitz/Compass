@@ -12,11 +12,16 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+from typing import Optional, List
 # Ensure import paths work
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from backend.scanner.scanner import scan_directory
+from backend.scanner.scanner import scan_directory, scan_all_monitored, is_path_security_blacklisted
 from backend.router.router import route_and_search
-from backend.models.db import log_file_access, get_db_connection
+from backend.models.db import (
+    log_file_access, get_db_connection, add_monitored_path, 
+    get_monitored_paths, remove_monitored_path
+)
+from backend.search.recommend import get_smart_recommendations
 
 app = FastAPI(title="Compass API", description="Personalized local search agent backend")
 
@@ -28,7 +33,103 @@ class ScanRequest(BaseModel):
 class AccessRequest(BaseModel):
     filepath: str
 
+class HorizonRequest(BaseModel):
+    path: str
+    label: Optional[str] = None
+
 # 2. REST Endpoints
+@app.get("/api/recommendations")
+def api_recommendations(limit: int = 6):
+    """
+    Returns smart zero-query file recommendations based on frequency-recency decay
+    and recently modified documents.
+    """
+    try:
+        recs = get_smart_recommendations(limit=limit)
+        return {
+            "status": "success",
+            "recommendations": recs
+        }
+    except Exception as e:
+        logger.error(f"Error generating recommendations: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@app.get("/api/horizons")
+def api_get_horizons():
+    """
+    Lists all registered monitored horizons and their file counts.
+    """
+    try:
+        return {
+            "status": "success",
+            "horizons": get_monitored_paths()
+        }
+    except Exception as e:
+        logger.error(f"Error fetching horizons: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@app.post("/api/horizons")
+def api_add_horizon(req: HorizonRequest):
+    """
+    Adds a folder to monitored horizons and triggers an immediate safe scan.
+    """
+    norm_path = os.path.abspath(req.path)
+    if not os.path.exists(norm_path) or not os.path.isdir(norm_path):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"Directory does not exist: {req.path}"
+        )
+    
+    if is_path_security_blacklisted(norm_path):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Security restriction: Cannot monitor protected system, credential, or secret directories."
+        )
+        
+    add_monitored_path(norm_path, req.label)
+    stats = scan_directory(norm_path)
+    return {
+        "status": "success",
+        "path": norm_path,
+        "stats": stats,
+        "horizons": get_monitored_paths()
+    }
+
+@app.delete("/api/horizons")
+def api_remove_horizon(path: str):
+    """
+    Removes a folder from monitored horizons and cleans up its index.
+    """
+    norm_path = os.path.abspath(path)
+    success = remove_monitored_path(norm_path)
+    return {
+        "status": "success" if success else "not_found",
+        "horizons": get_monitored_paths()
+    }
+
+@app.post("/api/scan-all")
+def api_scan_all(force: bool = False):
+    """
+    Scans all registered horizons.
+    """
+    try:
+        stats = scan_all_monitored(force=force)
+        return {
+            "status": "success",
+            "stats": stats
+        }
+    except Exception as e:
+        logger.error(f"Error scanning all horizons: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 @app.post("/api/scan")
 def api_scan(req: ScanRequest):
     """

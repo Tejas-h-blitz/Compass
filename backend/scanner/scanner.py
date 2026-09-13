@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import time
 import logging
 from typing import Dict, Any, List, Optional
@@ -11,7 +12,79 @@ logger = logging.getLogger(__name__)
 
 # Ensure the parent directory of backend is on the python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from backend.models.db import insert_or_update_file, get_file_by_path, delete_file
+from backend.models.db import (
+    insert_or_update_file, get_file_by_path, delete_file, 
+    get_monitored_paths, update_monitored_path_scanned
+)
+
+# --- Security-by-Design Guardrails ---
+# Directories that must NEVER be scanned under any circumstances (defense-in-depth)
+SECURITY_BLACKLIST_DIRS = {
+    '.ssh', '.aws', '.git', 'appdata', 'windows', 'program files',
+    'program files (x86)', '$recycle.bin', 'system volume information',
+    'node_modules', '.venv', 'venv', '__pycache__', 'env', '.next',
+    'dist', 'build', '.idea', '.vscode', '.config', 'cookies',
+    'credentials', 'recovery'
+}
+
+# File extensions that contain keys, certificates, or sensitive credentials
+SECURITY_BLACKLIST_EXTS = {
+    '.env', '.pem', '.key', '.kdbx', '.pfx', '.p12', '.credentials',
+    '.crt', '.csr', '.sqlite3-shm', '.wallet', '.secret'
+}
+
+# Specific sensitive filenames
+SECURITY_BLACKLIST_FILENAMES = {
+    'id_rsa', 'id_ed25519', 'id_dsa', 'id_ecdsa', '.git-credentials',
+    '.bash_history', 'wp-config.php', 'passwd', 'shadow', 'known_hosts',
+    'authorized_keys'
+}
+
+# Regex patterns for sanitizing secrets and API keys from text before storage/embeddings
+API_KEY_PATTERNS = [
+    (re.compile(r'-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+PRIVATE KEY-----'), '[REDACTED_PRIVATE_KEY]'),
+    (re.compile(r'\b(sk-[a-zA-Z0-9_\-]{20,})\b'), '[REDACTED_API_KEY]'),
+    (re.compile(r'\b(AIzaSy[a-zA-Z0-9_\-]{33})\b'), '[REDACTED_API_KEY]'),
+    (re.compile(r'\b(ghp_[a-zA-Z0-9]{36})\b'), '[REDACTED_GITHUB_TOKEN]'),
+    (re.compile(r'\b(AKIA[0-9A-Z]{16})\b'), '[REDACTED_AWS_KEY]'),
+    (re.compile(r'(?i)\b(password|secret|token|api_key|apikey|bearer)\s*[:=]\s*["\']([^"\']{6,})["\']'), r'\1: "[REDACTED_SECRET]"')
+]
+
+def is_path_security_blacklisted(filepath: str) -> bool:
+    """
+    Evaluates whether a file path or any of its parent directories match
+    the security blacklists. Prevents unauthorized indexing of private keys,
+    passwords, environment files, or system directories.
+    """
+    path_obj = Path(filepath)
+    filename = path_obj.name.lower()
+    
+    if filename in SECURITY_BLACKLIST_FILENAMES:
+        return True
+    if filename.startswith("~$") or filename.startswith(".~"):
+        return True
+    if filename.startswith(".env") or filename.endswith(".env"):
+        return True
+    if path_obj.suffix.lower() in SECURITY_BLACKLIST_EXTS:
+        return True
+        
+    for part in path_obj.parts:
+        if part.lower() in SECURITY_BLACKLIST_DIRS:
+            return True
+            
+    return False
+
+def sanitize_content(content: str) -> str:
+    """
+    Scans extracted document text for API keys, private keys, and secrets,
+    redacting them before they can be stored in SQLite or embedded in ChromaDB.
+    """
+    if not content:
+        return ""
+    sanitized = content
+    for pattern, replacement in API_KEY_PATTERNS:
+        sanitized = pattern.sub(replacement, sanitized)
+    return sanitized
 
 # Supported file extensions for text extraction
 # Keeping scope strictly constrained to txt, docx, pdf, and plain text/code files
@@ -65,17 +138,27 @@ def scan_file(filepath: str, force: bool = False) -> bool:
     if not path_obj.exists():
         return False
         
-    # Get basic OS file metadata
-    stat = path_obj.stat()
-    file_size = stat.st_size
-    created_at = stat.st_ctime
-    modified_at = stat.st_mtime
     filename = path_obj.name
     file_type = path_obj.suffix.lower()
-    
+
+    # Security check: verify against sensitive extensions, keys, and system directories
+    if is_path_security_blacklisted(filepath):
+        logger.info(f"Skipping security-blacklisted file: {filename}")
+        return False
+
     # Check if the file type is in our supported list
     all_supported = TEXT_EXTENSIONS.union(PDF_EXTENSIONS).union(DOCX_EXTENSIONS)
     if file_type not in all_supported:
+        return False
+
+    try:
+        # Get basic OS file metadata
+        stat = path_obj.stat()
+        file_size = stat.st_size
+        created_at = stat.st_ctime
+        modified_at = stat.st_mtime
+    except (PermissionError, OSError) as e:
+        logger.warning(f"Skipping inaccessible file {filepath}: {e}")
         return False
         
     # Skip files larger than 10MB to avoid high CPU/memory consumption and potential crashes
@@ -84,12 +167,8 @@ def scan_file(filepath: str, force: bool = False) -> bool:
         return False
         
     # Check if the file is already indexed and whether it has been modified.
-    # This is a critical optimization preventing redundant heavy text extraction
-    # and embedding computations for thousands of unchanged files.
     existing_file = get_file_by_path(filepath)
     if existing_file and not force:
-        # Compare modified time in db vs current OS modified time
-        # We allow a tiny precision delta (0.01s) due to float precision differences
         if abs(existing_file["modified_at"] - modified_at) < 0.01:
             return False
             
@@ -97,10 +176,11 @@ def scan_file(filepath: str, force: bool = False) -> bool:
     try:
         content = extract_text(filepath, file_type)
     except Exception as e:
-        # Non-negotiable standard: unreadable or corrupted files must not crash the indexer.
-        # We log and skip.
         logger.error(f"Failed to extract text from {filepath}: {e}")
         return False
+
+    # Sanitize content: scrub API keys, tokens, and private keys before storage/embeddings
+    content = sanitize_content(content)
         
     # Save/update SQLite index
     try:
@@ -124,8 +204,6 @@ def scan_file(filepath: str, force: bool = False) -> bool:
         upsert_file_embeddings(filepath, filename, content)
         logger.info(f"Indexed embeddings in ChromaDB for: {filename}")
     except ImportError:
-        # This will happen in Step 1 before Step 3 is completed.
-        # We catch the ImportError to keep Step 1 testable standalone.
         logger.debug(f"ChromaDB indexing skipped for {filename} (semantic search module not ready yet)")
     except Exception as e:
         logger.error(f"Failed to write embeddings to ChromaDB for {filepath}: {e}")
@@ -149,16 +227,22 @@ def scan_directory(directory_path: str, force: bool = False) -> Dict[str, int]:
     updated_count = 0
     found_filepaths = set()
     
-    # 1. Walk directory and index/update files
-    for root, dirs, files in os.walk(directory_path):
-        # In-place modify dirs to avoid scanning hidden or heavy developer folders
-        dirs[:] = [d for d in dirs if d not in {
-            '.git', 'node_modules', '.venv', 'venv', '__pycache__', 
-            'env', '.next', 'dist', 'build', '.idea', '.vscode'
-        }]
+    # 1. Walk directory safely without following symlinks/junction loops
+    for root, dirs, files in os.walk(directory_path, followlinks=False):
+        # In-place modify dirs to avoid scanning hidden or heavy developer/system folders
+        dirs[:] = [
+            d for d in dirs 
+            if d.lower() not in SECURITY_BLACKLIST_DIRS 
+            and not (d.startswith(".") and d not in {".", ".."})
+        ]
         for file in files:
             filepath = os.path.join(root, file)
             normalized_path = os.path.abspath(filepath)
+            
+            # Security guardrail
+            if is_path_security_blacklisted(normalized_path):
+                continue
+
             found_filepaths.add(normalized_path)
             scanned_count += 1
             
@@ -170,16 +254,12 @@ def scan_directory(directory_path: str, force: bool = False) -> Dict[str, int]:
                 logger.error(f"Error scanning file {normalized_path}: {e}")
                 
     # 2. Prune files that were deleted from disk
-    # Query database for all files starting with directory_path
     from backend.models.db import get_db_connection
     conn = get_db_connection()
     cursor = conn.cursor()
     
     pruned_count = 0
     abs_dir_prefix = os.path.abspath(directory_path)
-    
-    # Select all indexed files starting with the directory path to check for removal
-    # To prevent partial matches (e.g. C:\temp matches C:\temp_new), we append a separator
     sep = os.path.sep
     prefix_query = abs_dir_prefix if abs_dir_prefix.endswith(sep) else abs_dir_prefix + sep
     
@@ -189,10 +269,8 @@ def scan_directory(directory_path: str, force: bool = False) -> Dict[str, int]:
     
     for db_path in db_paths:
         if db_path not in found_filepaths:
-            # File no longer exists, delete it
             try:
                 delete_file(db_path)
-                # Also prune ChromaDB embeddings if available
                 try:
                     from backend.search.semantic_search import delete_file_embeddings
                     delete_file_embeddings(db_path)
@@ -211,3 +289,29 @@ def scan_directory(directory_path: str, force: bool = False) -> Dict[str, int]:
         "updated": updated_count,
         "pruned": pruned_count
     }
+
+def scan_all_monitored(force: bool = False) -> Dict[str, Any]:
+    """
+    Iterates over all user-monitored horizon folders and updates their indices.
+    """
+    horizons = get_monitored_paths()
+    total_scanned = 0
+    total_updated = 0
+    total_pruned = 0
+    
+    for h in horizons:
+        path = h["path"]
+        if os.path.exists(path):
+            stats = scan_directory(path, force=force)
+            total_scanned += stats["scanned"]
+            total_updated += stats["updated"]
+            total_pruned += stats["pruned"]
+            update_monitored_path_scanned(path)
+            
+    return {
+        "horizons_scanned": len(horizons),
+        "scanned": total_scanned,
+        "updated": total_updated,
+        "pruned": total_pruned
+    }
+

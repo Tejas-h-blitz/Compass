@@ -47,7 +47,7 @@ def main():
     
     # 2. Run Scanner on Test Corpus (First Scan)
     print("\n[2/5] Running scanner on test corpus (first run)...")
-    expected_files_count = len([f for f in os.listdir(TEST_CORPUS_DIR) if not f.startswith(".") and os.path.isfile(os.path.join(TEST_CORPUS_DIR, f))])
+    expected_files_count = len([f for f in os.listdir(TEST_CORPUS_DIR) if not f.startswith(".") and not f.startswith("~$") and os.path.isfile(os.path.join(TEST_CORPUS_DIR, f))])
     stats = scan_directory(TEST_CORPUS_DIR)
     print(f"Scan statistics: {stats}")
     assert stats["scanned"] == expected_files_count, f"Expected {expected_files_count} files, got {stats['scanned']}"

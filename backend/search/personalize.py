@@ -36,7 +36,7 @@ def get_access_history() -> Tuple[Dict[str, Tuple[int, float]], int]:
         """)
         rows = cursor.fetchall()
         for row in rows:
-            filepath = row[0]
+            filepath = os.path.abspath(row[0])
             count = row[1]
             last_accessed = row[2]
             history[filepath] = (count, last_accessed)
@@ -69,7 +69,8 @@ def calculate_personalization_boost(
     if current_time is None:
         current_time = time.time()
         
-    if filepath not in history or max_count == 0:
+    norm_path = os.path.abspath(filepath)
+    if norm_path not in history or max_count == 0:
         # Cold start case: zero historical interactions
         # Return 0.0 scores, but keep details explicit for explanations
         return {
@@ -80,7 +81,7 @@ def calculate_personalization_boost(
             "days_ago": None
         }
         
-    open_count, last_accessed = history[filepath]
+    open_count, last_accessed = history[norm_path]
     
     # 1. Frequency score (normalized linear boost)
     freq_score = open_count / max_count
