@@ -77,7 +77,7 @@ To surface documents you frequently and recently interact with, Compass computes
 $$S_{freq} = \frac{\text{Accesses}(f)}{\max_{f'} \text{Accesses}(f')}, \qquad S_{rec} = e^{-\lambda \cdot t}$$
 
 Where $t$ is the elapsed time in days and $\lambda = 0.1$ (representing a 10-day half-life). The final blended score is:
-
+ 
 $$S_{final} = 0.85 \cdot S_{base} + 0.15 \cdot (0.5 \cdot S_{freq} + 0.5 \cdot S_{rec})$$
 
 *(Under cold-start conditions with no prior interactions, files receive $0.85 \cdot S_{base}$ to preserve discoverability).*
