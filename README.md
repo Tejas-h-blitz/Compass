@@ -13,7 +13,7 @@ Compass is a high-performance **Agentic Desktop Search Engine** that unifies ult
 ---
 
 ## ✨ Key Features
-
+ 
 - ⚡ **Sub-Millisecond Keyword Retrieval**: SQLite FTS5 index with normalized BM25 term weighting.
 - 🧠 **Local Semantic Vector Search**: Embeddings powered by `sentence-transformers/all-MiniLM-L6-v2` stored in local ChromaDB collections.
 - 🚦 **Dynamic Query Classification & Routing**: Classifies search intent (file extensions, short tokens, conceptual markers) and selects the cheapest sufficient retrieval path, saving **~34% compute latency**.
