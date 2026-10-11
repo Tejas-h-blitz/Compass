@@ -22,6 +22,13 @@ from backend.models.db import (
     get_monitored_paths, remove_monitored_path
 )
 from backend.search.recommend import get_smart_recommendations
+from backend.platform.launcher import open_file, reveal_in_folder
+
+EXECUTABLE_BLOCKLIST = {
+    ".exe", ".com", ".bat", ".cmd", ".ps1", ".psm1", ".vbs", ".vbe",
+    ".js", ".jse", ".wsf", ".wsh", ".hta", ".msi", ".msp", ".scr",
+    ".pif", ".lnk", ".url", ".reg", ".jar", ".cpl", ".dll", ".py"
+}
 
 app = FastAPI(title="Compass API", description="Personalized local search agent backend")
 
@@ -178,48 +185,96 @@ def api_search(query: str, limit: int = 10, personalize: bool = True):
             detail=str(e)
         )
 
-def open_file_locally(filepath: str):
-    """
-    Launches the file in the default OS handler (association).
-    """
-    if not os.path.exists(filepath):
-        logger.warning(f"File not found on disk for OS open: {filepath}")
-        return False
-        
-    try:
-        # Check platform and run native open command.
-        # os.startfile is Windows-only and runs association matches.
-        if platform.system() == "Windows":
-            os.startfile(filepath)
-            return True
-        else:
-            logger.error(f"Unsupported operating system: {platform.system()}. Compass is currently Windows-only.")
-            return False
-    except Exception as e:
-        logger.error(f"Failed to open file locally {filepath}: {e}")
-        return False
-
 @app.post("/api/log-access")
 def api_log_access(req: AccessRequest):
     """
-    Logs user access pattern (frequency/recency signal) and opens the file locally.
+    Validates file launch request against indexed files, disk existence, monitored paths,
+    and executable blocklists. On validation success, logs access and launches or reveals the file.
     """
-    normalized_path = os.path.abspath(req.filepath)
+    # 1. Normalize the path (resolve symlinks, relative traversal, and casing)
+    normalized_path = os.path.normcase(os.path.realpath(req.filepath))
     
-    # 1. Log access in SQLite database
-    try:
-        log_file_access(normalized_path)
-    except Exception as e:
-        logger.error(f"Failed to write access log for {normalized_path}: {e}")
+    # 2. Verify file exists on disk
+    if not os.path.exists(normalized_path) or not os.path.isfile(normalized_path):
+        logger.warning(f"Rejected access: file does not exist on disk: {req.filepath}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File does not exist on disk."
+        )
         
-    # 2. Trigger native OS default app opener
-    opened = open_file_locally(normalized_path)
+    # Verify file is stored in the files index
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT filepath FROM files")
+    rows = cursor.fetchall()
+    conn.close()
     
-    return {
-        "status": "success",
-        "filepath": normalized_path,
-        "launched": opened
-    }
+    matched_db_filepath = None
+    for (db_p,) in rows:
+        if os.path.normcase(os.path.realpath(db_p)) == normalized_path:
+            matched_db_filepath = db_p
+            break
+            
+    if not matched_db_filepath:
+        logger.warning(f"Rejected access: file is not indexed in Compass: {req.filepath}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File is not indexed in Compass."
+        )
+        
+    # 3. Verify file is inside a registered monitored path
+    monitored = get_monitored_paths()
+    is_monitored = False
+    for m in monitored:
+        m_path = m.get("path", "")
+        if m_path:
+            norm_m = os.path.normcase(os.path.realpath(m_path))
+            try:
+                if os.path.commonpath([normalized_path, norm_m]) == norm_m:
+                    is_monitored = True
+                    break
+            except ValueError:
+                # Paths on different drives
+                continue
+                
+    if not is_monitored:
+        logger.warning(f"Rejected access: file is outside monitored paths: {req.filepath}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="File is outside registered monitored paths."
+        )
+        
+    # 4. Check executable / script blocklist
+    _, ext = os.path.splitext(normalized_path)
+    is_blocked = ext.lower() in EXECUTABLE_BLOCKLIST
+    
+    # 5. Log access only after validation succeeds
+    try:
+        log_file_access(matched_db_filepath)
+    except Exception as e:
+        logger.error(f"Failed to write access log for {matched_db_filepath}: {e}")
+        
+    # 6. Execute launch or reveal
+    if is_blocked:
+        reveal_in_folder(matched_db_filepath)
+        return {
+            "status": "revealed",
+            "action": "revealed",
+            "filepath": matched_db_filepath,
+            "launched": False,
+            "revealed": True,
+            "message": "File revealed in folder because executable/script types cannot be directly launched."
+        }
+    else:
+        open_file(matched_db_filepath)
+        return {
+            "status": "success",
+            "action": "launched",
+            "filepath": matched_db_filepath,
+            "launched": True,
+            "revealed": False,
+            "message": "File launched successfully."
+        }
 
 @app.get("/api/stats")
 def api_stats():

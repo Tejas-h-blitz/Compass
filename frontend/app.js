@@ -395,6 +395,21 @@ async function loadRecommendations() {
     }
 }
 
+function showToast(message) {
+    let toast = document.getElementById("compass-toast");
+    if (!toast) {
+        toast = document.createElement("div");
+        toast.id = "compass-toast";
+        toast.className = "compass-toast";
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.add("show");
+    setTimeout(() => {
+        toast.classList.remove("show");
+    }, 3500);
+}
+
 // 6. Log User Access & Launch File Locally
 async function logFileAccessAndLaunch(filepath) {
     try {
@@ -405,10 +420,17 @@ async function logFileAccessAndLaunch(filepath) {
         });
         
         if (response.ok) {
+            const data = await response.json();
+            if (data.action === "revealed" || data.revealed) {
+                showToast("Revealed file in folder (script/executable path)");
+            }
             updateDashboardStats();
             if (!searchInput.value.trim()) {
                 loadRecommendations();
             }
+        } else {
+            const err = await response.json().catch(() => ({}));
+            showToast(err.detail || "Launch rejected by security check");
         }
     } catch (e) {
         console.error("Failed to log file access:", e);
