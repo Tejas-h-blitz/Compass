@@ -110,10 +110,20 @@ function getFileBadge(fileType) {
     `;
 }
 
+function checkAuthResponse(response) {
+    if (response && response.status === 401) {
+        const overlay = document.getElementById("unauthorized-overlay");
+        if (overlay) overlay.classList.remove("hidden");
+        return false;
+    }
+    return true;
+}
+
 // 2. Dashboard Stats & Horizon Management
 async function updateDashboardStats() {
     try {
         const response = await fetch("/api/stats");
+        if (!checkAuthResponse(response)) return;
         if (response.ok) {
             const data = await response.json();
             if (statFilesCount) statFilesCount.textContent = data.total_files || 0;
@@ -126,6 +136,7 @@ async function updateDashboardStats() {
 async function loadHorizons() {
     try {
         const response = await fetch("/api/horizons");
+        if (!checkAuthResponse(response)) return;
         if (response.ok) {
             const data = await response.json();
             const horizons = data.horizons || [];
@@ -182,6 +193,7 @@ async function addHorizon() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ path: path })
         });
+        if (!checkAuthResponse(response)) return;
         
         if (response.ok) {
             const data = await response.json();
@@ -212,6 +224,7 @@ async function removeHorizon(path) {
         const response = await fetch(`/api/horizons?path=${encodeURIComponent(path)}`, {
             method: "DELETE"
         });
+        if (!checkAuthResponse(response)) return;
         if (response.ok) {
             loadHorizons();
             updateDashboardStats();
@@ -251,6 +264,8 @@ async function triggerScan(force = false) {
                 method: "POST"
             });
         }
+
+        if (!checkAuthResponse(response)) return;
 
         if (response.ok) {
             const data = await response.json();
@@ -309,6 +324,7 @@ async function loadRecommendations() {
 
     try {
         const response = await fetch("/api/recommendations?limit=4");
+        if (!checkAuthResponse(response)) return;
         if (response.ok) {
             const data = await response.json();
             const recs = data.recommendations || [];
@@ -418,6 +434,7 @@ async function logFileAccessAndLaunch(filepath) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ filepath: filepath })
         });
+        if (!checkAuthResponse(response)) return;
         
         if (response.ok) {
             const data = await response.json();
@@ -449,6 +466,7 @@ async function executeSearch() {
 
     try {
         const response = await fetch(`/api/search?query=${encodeURIComponent(query)}&personalize=${personalize}`);
+        if (!checkAuthResponse(response)) return;
         if (response.ok) {
             const data = await response.json();
             const results = data.results || [];

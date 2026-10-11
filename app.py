@@ -9,10 +9,12 @@ import webview
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from backend.main import app
 from backend.models.db import init_db
+from backend.security.auth import generate_launch_code
 
 def start_api_server():
     """
     Runs the FastAPI backend server using Uvicorn in a daemon thread.
+    Bound explicitly to 127.0.0.1.
     """
     uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")
 
@@ -46,6 +48,10 @@ def main():
     # Allow uvicorn to bind to port 8000 before opening the browser window
     time.sleep(1.5)
     
+    # Generate one-time single-use launch code for session initialization
+    launch_code = generate_launch_code()
+    launch_url = f"http://127.0.0.1:8000/?launch={launch_code}"
+    
     if args.app or args.browser:
         launched_app = False
         if args.app:
@@ -54,14 +60,14 @@ def main():
             if platform.system() == "Windows":
                 try:
                     print("Launching Compass in standalone App Mode via Microsoft Edge...")
-                    subprocess.Popen("start msedge --app=http://127.0.0.1:8000/", shell=True)
+                    subprocess.Popen(f'start msedge --app="{launch_url}"', shell=True)
                     launched_app = True
                 except Exception:
                     pass
         
         if not launched_app:
             print("Opening Compass in default system web browser...")
-            webbrowser.open("http://127.0.0.1:8000/")
+            webbrowser.open(launch_url)
             
         print("Compass application running at http://127.0.0.1:8000/")
         print("Press Ctrl+C to exit.")
@@ -72,11 +78,10 @@ def main():
             print("Stopping Compass application...")
     else:
         # 3. Start pywebview client desktop window.
-        # We specify resizable window with 1050x750 dimension to display layout elements side-by-side.
         print("Starting pywebview native window loop...")
         webview.create_window(
             title="Compass - Agentic Desktop Search",
-            url="http://127.0.0.1:8000/",
+            url=launch_url,
             width=1050,
             height=750,
             resizable=True

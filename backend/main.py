@@ -3,10 +3,11 @@ import sys
 import sqlite3
 import platform
 import logging
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Request, Depends
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
+import urllib.parse
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +24,9 @@ from backend.models.db import (
 )
 from backend.search.recommend import get_smart_recommendations
 from backend.platform.launcher import open_file, reveal_in_folder
+from backend.security.auth import (
+    SESSION_COOKIE_NAME, consume_launch_code, verify_session
+)
 
 EXECUTABLE_BLOCKLIST = {
     ".exe", ".com", ".bat", ".cmd", ".ps1", ".psm1", ".vbs", ".vbe",
@@ -30,7 +34,36 @@ EXECUTABLE_BLOCKLIST = {
     ".pif", ".lnk", ".url", ".reg", ".jar", ".cpl", ".dll", ".py"
 }
 
+ALLOWED_HOSTS = {"127.0.0.1", "localhost", "testserver"}
+
 app = FastAPI(title="Compass API", description="Personalized local search agent backend")
+
+@app.middleware("http")
+async def host_and_origin_security_middleware(request: Request, call_next):
+    # 1. Host header validation (DNS-rebinding protection)
+    host_header = request.headers.get("host", "")
+    host_name = host_header.split(":")[0].lower() if host_header else ""
+    if not host_name or host_name not in ALLOWED_HOSTS:
+        logger.warning(f"Rejected request with disallowed Host header: '{host_header}'")
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"detail": f"Disallowed Host header: {host_header}"}
+        )
+        
+    # 2. Origin header validation for state-changing operations
+    if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+        origin = request.headers.get("origin")
+        if origin:
+            parsed = urllib.parse.urlparse(origin)
+            origin_host = (parsed.hostname or "").lower()
+            if origin_host not in ALLOWED_HOSTS or origin_host != host_name:
+                logger.warning(f"Rejected cross-origin {request.method} from origin: '{origin}' (Host: '{host_header}')")
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={"detail": f"Cross-origin requests from '{origin}' are forbidden."}
+                )
+                
+    return await call_next(request)
 
 # 1. API Models
 class ScanRequest(BaseModel):
@@ -45,7 +78,7 @@ class HorizonRequest(BaseModel):
     label: Optional[str] = None
 
 # 2. REST Endpoints
-@app.get("/api/recommendations")
+@app.get("/api/recommendations", dependencies=[Depends(verify_session)])
 def api_recommendations(limit: int = 6):
     """
     Returns smart zero-query file recommendations based on frequency-recency decay
@@ -64,7 +97,7 @@ def api_recommendations(limit: int = 6):
             detail=str(e)
         )
 
-@app.get("/api/horizons")
+@app.get("/api/horizons", dependencies=[Depends(verify_session)])
 def api_get_horizons():
     """
     Lists all registered monitored horizons and their file counts.
@@ -81,7 +114,7 @@ def api_get_horizons():
             detail=str(e)
         )
 
-@app.post("/api/horizons")
+@app.post("/api/horizons", dependencies=[Depends(verify_session)])
 def api_add_horizon(req: HorizonRequest):
     """
     Adds a folder to monitored horizons and triggers an immediate safe scan.
@@ -108,7 +141,7 @@ def api_add_horizon(req: HorizonRequest):
         "horizons": get_monitored_paths()
     }
 
-@app.delete("/api/horizons")
+@app.delete("/api/horizons", dependencies=[Depends(verify_session)])
 def api_remove_horizon(path: str):
     """
     Removes a folder from monitored horizons and cleans up its index.
@@ -120,7 +153,7 @@ def api_remove_horizon(path: str):
         "horizons": get_monitored_paths()
     }
 
-@app.post("/api/scan-all")
+@app.post("/api/scan-all", dependencies=[Depends(verify_session)])
 def api_scan_all(force: bool = False):
     """
     Scans all registered horizons.
@@ -137,7 +170,7 @@ def api_scan_all(force: bool = False):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-@app.post("/api/scan")
+@app.post("/api/scan", dependencies=[Depends(verify_session)])
 def api_scan(req: ScanRequest):
     """
     Scans a directory path. Indexes files and syncs databases.
@@ -162,7 +195,7 @@ def api_scan(req: ScanRequest):
             detail=str(e)
         )
 
-@app.get("/api/search")
+@app.get("/api/search", dependencies=[Depends(verify_session)])
 def api_search(query: str, limit: int = 10, personalize: bool = True):
     """
     Executes search query using dynamic router.
@@ -185,7 +218,7 @@ def api_search(query: str, limit: int = 10, personalize: bool = True):
             detail=str(e)
         )
 
-@app.post("/api/log-access")
+@app.post("/api/log-access", dependencies=[Depends(verify_session)])
 def api_log_access(req: AccessRequest):
     """
     Validates file launch request against indexed files, disk existence, monitored paths,
@@ -276,7 +309,7 @@ def api_log_access(req: AccessRequest):
             "message": "File launched successfully."
         }
 
-@app.get("/api/stats")
+@app.get("/api/stats", dependencies=[Depends(verify_session)])
 def api_stats():
     """
     Compiles database statistics for the frontend dashboard.
@@ -316,13 +349,32 @@ os.makedirs(FRONTEND_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 @app.get("/")
-def read_root():
+def read_root(request: Request, launch: Optional[str] = None):
     """
     Serves the main frontend index HTML.
+    If a valid one-time launch code is provided in query params, sets the session cookie
+    and redirects to clean '/' URL.
     """
+    if launch:
+        session_token = consume_launch_code(launch)
+        if session_token:
+            response = RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+            response.set_cookie(
+                key=SESSION_COOKIE_NAME,
+                value=session_token,
+                httponly=True,
+                samesite="strict",
+                max_age=None  # Session cookie
+            )
+            return response
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"detail": "Invalid or expired launch code. Open Compass from the app window."}
+            )
+
     html_path = os.path.join(FRONTEND_DIR, "index.html")
     if not os.path.exists(html_path):
-        # Create a basic placeholder file just in case it is read before step 8 is written
         with open(html_path, "w") as f:
             f.write("<h1>Loading Compass...</h1>")
     return FileResponse(html_path)

@@ -1026,3 +1026,51 @@ body {
     transform: translateY(0);
     pointer-events: auto;
 }
+
+/* Unauthorized Overlay */
+.unauthorized-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(9, 10, 13, 0.95);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.unauthorized-card {
+    background: #12151c;
+    border: 1px solid rgba(244, 63, 94, 0.3);
+    border-radius: var(--radius-lg);
+    padding: 36px 44px;
+    text-align: center;
+    max-width: 420px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+}
+
+.unauthorized-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: rgba(244, 63, 94, 0.1);
+    color: #f43f5e;
+    margin: 0 auto 20px auto;
+}
+
+.unauthorized-card h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+}
+
+.unauthorized-card p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
