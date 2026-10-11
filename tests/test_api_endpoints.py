@@ -5,10 +5,13 @@ from fastapi.testclient import TestClient
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from backend.main import app
+from backend.security.auth import generate_launch_code
 
 class TestApiEndpoints(unittest.TestCase):
     def setUp(self):
-        self.client = TestClient(app)
+        self.client = TestClient(app, base_url="http://127.0.0.1:8000")
+        code = generate_launch_code()
+        self.client.get(f"/?launch={code}")
 
     def test_recommendations_endpoint(self):
         response = self.client.get("/api/recommendations")
