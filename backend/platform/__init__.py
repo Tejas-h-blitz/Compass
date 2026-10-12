@@ -8,6 +8,11 @@ from backend.platform.autostart import (
     disable as disable_autostart,
     build_autostart_command
 )
+from backend.platform.hotkey import (
+    parse_hotkey_string,
+    start_hotkey_listener,
+    stop_hotkey_listener
+)
 
 __all__ = [
     "open_file",
@@ -24,4 +29,7 @@ __all__ = [
     "enable_autostart",
     "disable_autostart",
     "build_autostart_command",
+    "parse_hotkey_string",
+    "start_hotkey_listener",
+    "stop_hotkey_listener",
 ]
