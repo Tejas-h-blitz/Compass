@@ -210,20 +210,42 @@ The backend exposes the following REST API endpoints at `http://127.0.0.1:8000`:
 
 ---
 
-## 8. Current Technical Boundaries & What is NOT Yet Implemented
+---
 
-To give a clear baseline for Phase 2 development, here are the architectural boundaries of the current implementation:
+## 8. Application Shell Architecture (Phase 2B)
 
-1. **File Modification Monitoring**: Scanning is currently poll/trigger-based (on startup or via manual "Scan Folders" button). There is no active filesystem event daemon (e.g., `watchdog` monitoring in the background).
+Compass features an installed background application shell designed for seamless Windows desktop integration:
+
+| Component | Status | Implementation Details |
+|:---|:---:|:---|
+| **System Tray Resident** | **Implemented** | Managed via `pystray` with dynamically drawn 64x64 RGBA Pillow compass icon (accent blue `#3b82f6` ring and directional needle). Main thread owns the tray event loop while Uvicorn, hotkey, and event listener run on daemon threads. Closing the UI window does not terminate the process. Menu provides: *Open Compass* (default), *Rescan folders*, *Start with Windows* (checkable), *Open logs folder*, and *Quit Compass* (clean graceful shutdown with 5s watchdog). |
+| **Single Instance Enforcement** | **Implemented** | Win32 per-session named mutex `Local\CompassSingleInstance` via `CreateMutexW`. Secondary launches detect `ERROR_ALREADY_EXISTS (183)`, signal named event `Local\CompassShowWindow`, and exit cleanly with code 0. Primary instance listens via `WaitForSingleObject` and restores/focuses its existing window. |
+| **Window Management & Dedicated Profile** | **Implemented** | Finds existing windows via `EnumWindows` and `GetWindowTextW`. Restores minimized windows (`ShowWindow(SW_RESTORE)`) and brings them to foreground (`SetForegroundWindow`). Launches Edge in app mode with an isolated dedicated profile: `--app=<fresh_url> --user-data-dir=%LOCALAPPDATA%\Compass\edge-profile --no-first-run --no-default-browser-check`, preventing cookie crosstalk and browser process handoffs. Falls back to Chrome or default system browser. |
+| **Per-User Windows Autostart** | **Implemented** | Pure `winreg` implementation managing `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Compass`. Automatically builds quoted command (`pythonw.exe app.py --background` in source mode, `<sys.executable> --background` when frozen). Single source of truth in registry; wired to tray checkbox. |
+| **Configurable Global Hotkey** | **Implemented** | Dedicated thread running Win32 message loop (`RegisterHotKey` with `MOD_NOREPEAT` and `GetMessageW`). Default combo `ctrl+alt+space`. Pure string parser validates combinations (ctrl, alt, shift, win + letters, digits, F1-F12, space) and rejects bare keys. Conflict-resilient: if hotkey is already registered by another app, logs warning and raises tray notification without crashing. |
+| **Paths, Settings & Logging Foundations** | **Implemented** | Single source of truth in `backend/paths.py`. Persistent home under `%LOCALAPPDATA%\Compass` containing `logs/compass.log` (`RotatingFileHandler` 1MB x 3 backups with `pythonw` stdout/stderr redirection and `log_config=None` for Uvicorn), `edge-profile/`, and `settings.json` (atomic file replacement and `.bak` corruption recovery). Dynamic runtime port selection (`choose_port(8000)`) with synchronized Host/Origin middleware validation. |
+
+### Known Limitations
+1. **Windows Platform Only**: Desktop shell components (`backend/platform/*`) interface directly with Win32 `ctypes` and `winreg`. macOS / Linux ports require platform-specific stubs (`NotImplementedError` raised).
+2. **Foreground Focus Restrictions**: Under Windows foreground activation locks (e.g. `LockSetForegroundWindow`), `SetForegroundWindow` may be restricted by the OS if invoked from a background hotkey or secondary process. Compass gracefully falls back to `FlashWindowEx` to flash the window and taskbar item.
+3. **Hotkey Conflicts**: Global hotkeys require exclusive OS registration. If another running program owns `ctrl+alt+space`, registration fails gracefully; Compass logs the conflict and notifies the user to adjust `settings.json`.
+
+---
+
+## 9. Current Technical Boundaries & What is NOT Yet Implemented
+
+To give a clear baseline for future development, here are the architectural boundaries of the current implementation:
+
+1. **File Modification Monitoring**: Scanning is currently poll/trigger-based (via manual "Rescan folders" in tray/UI or horizon addition). There is no active filesystem event daemon (e.g., continuous `watchdog` monitoring in the background).
 2. **Document Types Supported**: Supports `.txt`, `.md`, `.pdf`, `.docx`, and major code formats (`.py`, `.js`, `.cpp`, `.html`, `.json`, etc.). It does **not** yet perform OCR on image files (`.png`, `.jpg`, `.tiff`) or extract text from presentations (`.pptx`) or spreadsheets (`.xlsx`).
 3. **Chunking Strategy**: Documents are currently embedded as single cohesive representations (or truncated top sections). There is no fine-grained chunk-level retrieval with sliding windows.
 4. **Interactive Chat / RAG**: Compass is currently an **intelligent search and recommendation system**, not an interactive conversation agent (i.e., users cannot ask questions like *"summarize section 3 of my meeting minutes"* directly in the UI).
 5. **Multi-Modal Embeddings**: No CLIP/image vector embeddings for searching diagrams or pictures by natural language.
-6. **OS Distribution Packaging**: Runs locally via Python/Uvicorn server. Not yet bundled into an installer (`.exe` / `.msi` via PyInstaller/InnoSetup) with system tray integration and a global keyboard hook (`Cmd/Ctrl + Space`).
+6. **Installer Bundling**: Not yet bundled into an installer (`.msi` / `.exe` via InnoSetup or WiX).
 
 ---
 
-## 9. Questions & Focus Areas for Claude (Next Steps Guidance)
+## 10. Questions & Focus Areas for Claude (Next Steps Guidance)
 
 *Prompt for Claude when evaluating this specification:*
 
@@ -231,4 +253,4 @@ To give a clear baseline for Phase 2 development, here are the architectural bou
 > 1. **Immediate High-Impact Enhancements (Phase 2)**: What are the most practical engineering additions to make this system competitive with tools like Raycast, Apple Spotlight, and Command E?
 > 2. **Advanced Agentic AI Workflows**: How can we evolve this from retrieval into an autonomous agent (e.g., automated document clustering, cross-file synthesis, proactive task reminders, local RAG question-answering via Ollama/Llama 3)?
 > 3. **Performance & Scaling**: What optimizations are needed if the index scales from 1,000 files to 100,000+ files across multiple physical drives?
-> 4. **Packaging & Desktop Integration**: What is the cleanest architecture to distribute this as a lightweight native background daemon with a global OS hotkey?"*
+> 4. **Packaging & Desktop Distribution**: What is the cleanest architecture to package and sign this as a standalone desktop binary (.msi/.exe installer)?"*
