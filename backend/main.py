@@ -35,6 +35,17 @@ EXECUTABLE_BLOCKLIST = {
 }
 
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "testserver"}
+RUNTIME_PORT: Optional[int] = None
+
+def set_runtime_port(port: int):
+    """Sets the runtime port that Compass is listening on for Host/Origin middleware validation."""
+    global RUNTIME_PORT
+    RUNTIME_PORT = port
+
+def get_runtime_port() -> int:
+    """Returns the current runtime port or defaults to 8000."""
+    global RUNTIME_PORT
+    return RUNTIME_PORT if RUNTIME_PORT is not None else 8000
 
 app = FastAPI(title="Compass API", description="Personalized local search agent backend")
 
@@ -42,13 +53,28 @@ app = FastAPI(title="Compass API", description="Personalized local search agent 
 async def host_and_origin_security_middleware(request: Request, call_next):
     # 1. Host header validation (DNS-rebinding protection)
     host_header = request.headers.get("host", "")
-    host_name = host_header.split(":")[0].lower() if host_header else ""
+    if host_header:
+        host_parts = host_header.split(":")
+        host_name = host_parts[0].lower()
+        host_port = int(host_parts[1]) if len(host_parts) > 1 and host_parts[1].isdigit() else None
+    else:
+        host_name = ""
+        host_port = None
+
     if not host_name or host_name not in ALLOWED_HOSTS:
         logger.warning(f"Rejected request with disallowed Host header: '{host_header}'")
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={"detail": f"Disallowed Host header: {host_header}"}
         )
+
+    if RUNTIME_PORT is not None and host_port is not None and host_name != "testserver":
+        if host_port != RUNTIME_PORT:
+            logger.warning(f"Rejected request with mismatched Host port: {host_port} != {RUNTIME_PORT}")
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"detail": f"Disallowed Host port: {host_port}"}
+            )
         
     # 2. Origin header validation for state-changing operations
     if request.method in ("POST", "PUT", "DELETE", "PATCH"):
@@ -56,12 +82,20 @@ async def host_and_origin_security_middleware(request: Request, call_next):
         if origin:
             parsed = urllib.parse.urlparse(origin)
             origin_host = (parsed.hostname or "").lower()
+            origin_port = parsed.port
             if origin_host not in ALLOWED_HOSTS or origin_host != host_name:
                 logger.warning(f"Rejected cross-origin {request.method} from origin: '{origin}' (Host: '{host_header}')")
                 return JSONResponse(
                     status_code=status.HTTP_403_FORBIDDEN,
                     content={"detail": f"Cross-origin requests from '{origin}' are forbidden."}
                 )
+            if RUNTIME_PORT is not None and origin_port is not None and origin_host != "testserver":
+                if origin_port != RUNTIME_PORT:
+                    logger.warning(f"Rejected request with mismatched Origin port: {origin_port} != {RUNTIME_PORT}")
+                    return JSONResponse(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        content={"detail": f"Cross-origin port '{origin_port}' is forbidden."}
+                    )
                 
     return await call_next(request)
 

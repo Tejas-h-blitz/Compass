@@ -13,9 +13,10 @@ from sentence_transformers import SentenceTransformer
 # Ensure import paths work
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from backend.models.db import get_file_by_path
+from backend.paths import data_dir
 
 # Resolve paths
-CHROMA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "chroma"))
+CHROMA_DIR = os.path.join(data_dir(), "chroma")
 
 # Singleton patterns for model and ChromaDB client.
 # This prevents reloading the transformer model and re-opening database connections

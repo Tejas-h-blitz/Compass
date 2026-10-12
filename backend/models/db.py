@@ -3,9 +3,10 @@ import os
 from typing import Dict, Any, List, Optional
 import time
 
-# Resolve the database path. We use a relative path from the workspace
-# and make it absolute to ensure consistency across different execution contexts.
-DB_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))
+from backend.paths import data_dir
+
+# Resolve the database path using backend.paths as single source of truth.
+DB_DIR = data_dir()
 DB_PATH = os.path.join(DB_DIR, "compass.db")
 
 def get_db_connection() -> sqlite3.Connection:

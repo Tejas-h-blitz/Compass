@@ -29,6 +29,14 @@ def generate_launch_code() -> str:
     _active_launch_codes.add(code)
     return code
 
+def mint_launch_url(port: int = 8000) -> str:
+    """
+    Mints a fresh single-use launch code and constructs the corresponding launch URL
+    for the specified runtime port.
+    """
+    code = generate_launch_code()
+    return f"http://127.0.0.1:{port}/?launch={code}"
+
 def consume_launch_code(code: str) -> Optional[str]:
     """
     Validates the launch code using constant-time comparison.
