@@ -148,3 +148,16 @@ def choose_port(preferred: int = 8000, host: str = "127.0.0.1") -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((host, 0))
         return s.getsockname()[1]
+
+_RUNTIME_PORT: Optional[int] = None
+
+def set_runtime_port(port: int) -> None:
+    """Sets the runtime port Compass is listening on."""
+    global _RUNTIME_PORT
+    _RUNTIME_PORT = port
+
+def get_runtime_port() -> int:
+    """Returns the current runtime port or defaults to 8000."""
+    global _RUNTIME_PORT
+    return _RUNTIME_PORT if _RUNTIME_PORT is not None else 8000
+

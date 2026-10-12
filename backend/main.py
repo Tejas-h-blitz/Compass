@@ -35,17 +35,7 @@ EXECUTABLE_BLOCKLIST = {
 }
 
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "testserver"}
-RUNTIME_PORT: Optional[int] = None
-
-def set_runtime_port(port: int):
-    """Sets the runtime port that Compass is listening on for Host/Origin middleware validation."""
-    global RUNTIME_PORT
-    RUNTIME_PORT = port
-
-def get_runtime_port() -> int:
-    """Returns the current runtime port or defaults to 8000."""
-    global RUNTIME_PORT
-    return RUNTIME_PORT if RUNTIME_PORT is not None else 8000
+from backend.paths import get_runtime_port, set_runtime_port
 
 app = FastAPI(title="Compass API", description="Personalized local search agent backend")
 
@@ -68,9 +58,10 @@ async def host_and_origin_security_middleware(request: Request, call_next):
             content={"detail": f"Disallowed Host header: {host_header}"}
         )
 
-    if RUNTIME_PORT is not None and host_port is not None and host_name != "testserver":
-        if host_port != RUNTIME_PORT:
-            logger.warning(f"Rejected request with mismatched Host port: {host_port} != {RUNTIME_PORT}")
+    runtime_port = get_runtime_port()
+    if runtime_port is not None and host_port is not None and host_name != "testserver":
+        if host_port != runtime_port:
+            logger.warning(f"Rejected request with mismatched Host port: {host_port} != {runtime_port}")
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={"detail": f"Disallowed Host port: {host_port}"}
@@ -89,9 +80,9 @@ async def host_and_origin_security_middleware(request: Request, call_next):
                     status_code=status.HTTP_403_FORBIDDEN,
                     content={"detail": f"Cross-origin requests from '{origin}' are forbidden."}
                 )
-            if RUNTIME_PORT is not None and origin_port is not None and origin_host != "testserver":
-                if origin_port != RUNTIME_PORT:
-                    logger.warning(f"Rejected request with mismatched Origin port: {origin_port} != {RUNTIME_PORT}")
+            if runtime_port is not None and origin_port is not None and origin_host != "testserver":
+                if origin_port != runtime_port:
+                    logger.warning(f"Rejected request with mismatched Origin port: {origin_port} != {runtime_port}")
                     return JSONResponse(
                         status_code=status.HTTP_403_FORBIDDEN,
                         content={"detail": f"Cross-origin port '{origin_port}' is forbidden."}
