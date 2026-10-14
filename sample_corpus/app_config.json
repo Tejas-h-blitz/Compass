@@ -1,0 +1,16 @@
+{
+  "appName": "CompassLocalSearch",
+  "version": "0.3.0",
+  "environment": "development",
+  "search": {
+    "hybridAlpha": 0.5,
+    "topK": 10,
+    "vectorMetric": "cosine",
+    "recencyDecayHalfLifeDays": 7.0
+  },
+  "indexing": {
+    "quietPeriodSeconds": 1.5,
+    "stormThreshold": 500,
+    "batchSize": 100
+  }
+}

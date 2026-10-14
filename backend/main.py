@@ -279,6 +279,82 @@ def api_system_info():
         "version": "0.3.0"
     }
 
+class ModeChangeRequest(BaseModel):
+    mode: str
+
+def restart_compass_process(new_mode: str):
+    """
+    Saves new mode to settings.json, triggers graceful application shutdown,
+    and spawns a detached replacement process in the requested mode.
+    """
+    import subprocess
+    import threading
+    from backend.settings import load_settings, save_settings
+    from backend.paths import repo_root
+
+    s = load_settings()
+    s["mode"] = new_mode
+    save_settings(s)
+
+    cmd = [sys.executable, "app.py"]
+    if new_mode == "demo":
+        cmd.append("--demo")
+
+    cwd = repo_root()
+    if sys.platform == "win32":
+        DETACHED_PROCESS = 0x00000008
+        CREATE_NO_WINDOW = 0x08000000
+        flags = DETACHED_PROCESS | CREATE_NO_WINDOW
+    else:
+        flags = 0
+
+    def _do_restart():
+        time.sleep(0.4)
+        try:
+            import app as app_module
+            app_module.shutdown_application()
+        except Exception:
+            pass
+        subprocess.Popen(cmd, cwd=cwd, creationflags=flags, close_fds=True)
+        os._exit(0)
+
+    threading.Thread(target=_do_restart, daemon=True, name="CompassModeRestartWorker").start()
+
+@app.post("/api/system/mode", dependencies=[Depends(verify_session)])
+def api_system_set_mode(req: ModeChangeRequest):
+    """Switches application mode between demo and normal, restarting the process."""
+    if req.mode not in ("demo", "normal"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mode must be 'demo' or 'normal'.")
+    restart_compass_process(req.mode)
+    return {"status": "accepted", "mode": req.mode, "message": f"Switching to {req.mode} mode..."}
+
+# --- Demo Mode Specific APIs ---
+@app.post("/api/demo/simulate-history", dependencies=[Depends(verify_session)])
+def api_demo_simulate_history():
+    """Seeds simulated usage history in access_log. Returns 403 in normal mode."""
+    from backend.demo import is_demo_mode, seed_simulated_history
+    if not is_demo_mode():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Simulated history can only be loaded in Demo Mode."
+        )
+    try:
+        count = seed_simulated_history()
+        return {"status": "success", "seeded_records": count}
+    except Exception as e:
+        logger.error(f"Error seeding simulated history: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@app.get("/api/demo/suggested-queries", dependencies=[Depends(verify_session)])
+def api_demo_suggested_queries():
+    """Returns suggested queries from manifest.json to display in the demo UI panel."""
+    from backend.demo import get_demo_manifest
+    manifest = get_demo_manifest()
+    return {
+        "status": "success",
+        "suggested_queries": manifest.get("suggested_queries", [])
+    }
+
 @app.post("/api/scan-all", dependencies=[Depends(verify_session)])
 def api_scan_all(force: bool = False):
     """

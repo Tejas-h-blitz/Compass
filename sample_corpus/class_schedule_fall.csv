@@ -1,0 +1,5 @@
+CourseCode,CourseTitle,Instructor,Days,Time,Location,Credits
+CS452,Distributed Systems Engineering,Prof. Wallace,Mon/Wed,10:00-11:30,Gates Hall 104,4
+CS421,Database System Implementation,Prof. Vance,Tue/Thu,13:00-14:30,Packard 202,4
+CS361,Machine Learning Foundations,Prof. Ng,Tue/Thu,15:00-16:30,Hewlett 200,3
+ENGR110,Engineering Ethics & Society,Prof. Miller,Friday,11:00-12:00,Thornton 110,2

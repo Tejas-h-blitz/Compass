@@ -7,6 +7,31 @@ os.chdir(_REPO_ROOT)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
+# Early mode detection (normal vs demo) before data_dir() is called anywhere
+import json
+_is_demo_mode_active = "--demo" in sys.argv
+if not _is_demo_mode_active:
+    try:
+        if sys.platform == "win32":
+            _home = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local")), "Compass")
+        else:
+            _home = os.path.expanduser("~/.compass")
+        _sf = os.path.join(_home, "settings.json")
+        if os.path.exists(_sf):
+            with open(_sf, "r", encoding="utf-8") as _f:
+                _s = json.load(_f)
+                if _s.get("mode") == "demo":
+                    _is_demo_mode_active = True
+    except Exception:
+        pass
+
+if _is_demo_mode_active:
+    if sys.platform == "win32":
+        _demo_dir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local")), "Compass", "demo")
+    else:
+        _demo_dir = os.path.expanduser("~/.compass/demo")
+    os.environ["COMPASS_DATA_DIR"] = _demo_dir
+
 import time
 import threading
 import logging
@@ -123,12 +148,17 @@ def main():
         action="store_true",
         help="Launch application silently into system tray (no window displayed)"
     )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Launch application in isolated Demo Mode using bundled sample corpus"
+    )
     args = parser.parse_args()
 
-    # 1. Single Instance Check via named mutex
+    # 1. Single Instance Check via named mutex (retry up to 10s to avoid race when restarting)
     global _single_instance
     _single_instance = SingleInstance()
-    if not _single_instance.acquire():
+    if not _single_instance.acquire(timeout=10.0):
         logger.info("Another Compass instance is already running. Signaling show window and exiting.")
         _single_instance.signal_existing_instance()
         _single_instance.close()
@@ -142,7 +172,16 @@ def main():
     # 3. Ensure SQLite schema exists (lightweight schema check, no scan, no model preload)
     init_db()
 
-    # 4. Start incremental live indexing service
+    # 4. If running in Demo Mode, provision sample corpus and setup monitored root
+    if _is_demo_mode_active or args.demo:
+        try:
+            from backend.demo import setup_demo_corpus_if_needed
+            setup_demo_corpus_if_needed()
+            logger.info("Demo corpus checked and initialized.")
+        except Exception as e:
+            logger.error(f"Failed to setup demo corpus: {e}")
+
+    # 5. Start incremental live indexing service
     try:
         from backend.indexing.service import global_indexing_service
         global_indexing_service.is_background_mode = bool(args.background)
@@ -151,10 +190,10 @@ def main():
     except Exception as e:
         logger.error(f"Failed to start indexing service: {e}")
 
-    # 5. Start show-event listener thread
+    # 6. Start show-event listener thread
     _single_instance.start_listener(lambda: show_or_open(runtime_port))
 
-    # 6. Spin up Uvicorn in background daemon thread
+    # 7. Spin up Uvicorn in background daemon thread
     global _server_thread
     _server_thread = threading.Thread(target=start_api_server, args=(runtime_port,), daemon=True, name="CompassUvicornServer")
     _server_thread.start()
@@ -162,7 +201,7 @@ def main():
     # Allow uvicorn to bind before attempting window launch
     time.sleep(0.5)
 
-    # 6. Window launch behavior
+    # 8. Window launch behavior
     # Startup modes:
     # --background: tray only, no window
     # --app or no flag: tray + open window
@@ -175,17 +214,24 @@ def main():
         else:
             show_or_open(runtime_port)
 
-    # 7. Start global hotkey (Task 5 hook if available)
+    # 9. Start global hotkey (Task 5 hook if available)
     try:
         from backend.platform.hotkey import start_hotkey_listener
         start_hotkey_listener(lambda: show_or_open(runtime_port))
     except Exception as e:
         logger.debug(f"Hotkey not initialized yet: {e}")
 
-    # 8. Start system tray on main thread (blocks until Quit clicked or stop_tray called)
+    # 10. Start system tray on main thread (blocks until Quit clicked or stop_tray called)
+    def _switch_mode_action():
+        from backend.main import restart_compass_process
+        from backend.demo import is_demo_mode
+        target_mode = "normal" if is_demo_mode() else "demo"
+        restart_compass_process(target_mode)
+
     run_tray(
         on_open_callback=lambda: show_or_open(runtime_port),
-        on_quit_callback=shutdown_application
+        on_quit_callback=shutdown_application,
+        on_switch_mode_callback=_switch_mode_action
     )
 
 if __name__ == "__main__":

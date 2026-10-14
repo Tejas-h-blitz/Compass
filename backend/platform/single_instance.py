@@ -76,25 +76,37 @@ else:
             self._stop_listening = threading.Event()
             self._listener_thread: Optional[threading.Thread] = None
 
-        def acquire(self) -> bool:
+        def acquire(self, timeout: float = 0.0) -> bool:
             """
             Attempts to acquire the per-session named mutex.
+            If timeout > 0, retries for up to timeout seconds (useful when restarting or switching modes).
             Returns True if this is the primary instance.
             Returns False if another instance is already running.
             """
-            self.mutex_handle = kernel32.CreateMutexW(None, False, self.mutex_name)
-            last_error = kernel32.GetLastError()
+            import time
+            start = time.time()
+            while True:
+                self.mutex_handle = kernel32.CreateMutexW(None, False, self.mutex_name)
+                last_error = kernel32.GetLastError()
 
-            if not self.mutex_handle:
-                logger.error(f"Failed to create mutex '{self.mutex_name}', error: {last_error}")
-                return False
+                if not self.mutex_handle:
+                    logger.error(f"Failed to create mutex '{self.mutex_name}', error: {last_error}")
+                    return False
 
-            if last_error == ERROR_ALREADY_EXISTS:
-                self.is_primary = False
-                return False
+                if last_error != ERROR_ALREADY_EXISTS:
+                    self.is_primary = True
+                    return True
 
-            self.is_primary = True
-            return True
+                # Mutex exists (another instance still holds it)
+                kernel32.CloseHandle(self.mutex_handle)
+                self.mutex_handle = None
+
+                elapsed = time.time() - start
+                if elapsed >= timeout:
+                    self.is_primary = False
+                    return False
+
+                time.sleep(0.25)
 
         def signal_existing_instance(self) -> bool:
             """

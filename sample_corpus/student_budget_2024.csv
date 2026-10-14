@@ -1,0 +1,11 @@
+Month,Category,Item,Amount,PaymentMethod,Notes
+September,Housing,Apartment Rent,800.00,Zelle,Split 3 ways
+September,Utilities,Sonic Fiber Internet,20.00,Debit Card,1Gbps split
+September,Groceries,Trader Joe's & Costco,340.50,Credit Card,Weekly meals
+September,Transportation,Caltrain Monthly Pass,95.00,Clipper Card,Student discount
+September,Academic,Textbooks & Supplies,125.00,Credit Card,Algorithm book
+October,Housing,Apartment Rent,800.00,Zelle,Split 3 ways
+October,Utilities,Sonic Fiber Internet,20.00,Debit Card,1Gbps split
+October,Groceries,Trader Joe's & Costco,315.20,Credit Card,Oats & chicken
+October,Transportation,Caltrain Monthly Pass,95.00,Clipper Card,Student pass
+October,Personal,Gym Membership,35.00,Debit Card,Campus rec pass
