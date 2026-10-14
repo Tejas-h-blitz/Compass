@@ -385,6 +385,68 @@ def prune_files_under_path(dir_path: str) -> int:
     finally:
         conn.close()
 
+def rename_file_in_access_log(old_path: str, new_path: str) -> int:
+    """
+    Rewrites access_log.filepath from old_path to new_path so personalization history survives renames/moves.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    norm_old = os.path.abspath(old_path)
+    norm_new = os.path.abspath(new_path)
+    try:
+        cursor.execute("UPDATE access_log SET filepath = ? WHERE filepath = ?", (norm_new, norm_old))
+        updated = cursor.rowcount
+        conn.commit()
+        return updated
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+def prune_monitored_root_data(root_path: str, remaining_roots: Optional[List[str]] = None) -> int:
+    """
+    Prunes index rows, Chroma embeddings, and access_log rows for all files under root_path
+    that are not covered by any remaining monitored roots.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    norm_root = os.path.abspath(root_path)
+    sep = os.path.sep
+    prefix = norm_root if norm_root.endswith(sep) else norm_root + sep
+
+    if remaining_roots is None:
+        cursor.execute("SELECT path FROM monitored_paths WHERE path != ?", (norm_root,))
+        remaining_roots = [r[0] for r in cursor.fetchall()]
+
+    norm_remaining = [os.path.abspath(r) for r in remaining_roots]
+
+    try:
+        cursor.execute("SELECT filepath FROM files WHERE filepath LIKE ? OR filepath = ?", (prefix + "%", norm_root))
+        paths = [r[0] for r in cursor.fetchall()]
+        pruned_count = 0
+        for p in paths:
+            # Check if covered by another root
+            is_covered = False
+            for rem in norm_remaining:
+                rem_prefix = rem if rem.endswith(sep) else rem + sep
+                if p == rem or p.startswith(rem_prefix):
+                    is_covered = True
+                    break
+            if not is_covered:
+                delete_file(p)
+                try:
+                    from backend.search.semantic_search import delete_file_embeddings
+                    delete_file_embeddings(p)
+                except Exception:
+                    pass
+                cursor.execute("DELETE FROM access_log WHERE filepath = ?", (p,))
+                pruned_count += 1
+        conn.commit()
+        return pruned_count
+    finally:
+        conn.close()
+
 def get_recent_and_frequent_files(limit: int = 8) -> List[Dict[str, Any]]:
     """
     Retrieves candidates for zero-query smart recommendations.

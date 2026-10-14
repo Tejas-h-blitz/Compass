@@ -15,6 +15,7 @@ from backend.platform.hotkey import (
 )
 from backend.platform.known_folders import get_known_folder, get_known_folders
 from backend.platform.dialogs import pick_folder
+from backend.platform.priority import set_thread_priority_below_normal
 
 __all__ = [
     "open_file",
@@ -37,4 +38,5 @@ __all__ = [
     "get_known_folder",
     "get_known_folders",
     "pick_folder",
+    "set_thread_priority_below_normal",
 ]

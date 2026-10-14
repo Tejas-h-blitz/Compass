@@ -82,14 +82,21 @@ def shutdown_application():
     except Exception as e:
         logger.warning(f"Error terminating browser: {e}")
 
-    # 4. Stop Uvicorn server and wait for thread
+    # 4. Stop Indexing Service promptly
+    try:
+        from backend.indexing.service import global_indexing_service
+        global_indexing_service.stop(timeout=2.0)
+    except Exception as e:
+        logger.warning(f"Error stopping indexing service: {e}")
+
+    # 5. Stop Uvicorn server and wait for thread
     global _server_instance, _server_thread
     if _server_instance:
         _server_instance.should_exit = True
     if _server_thread and _server_thread.is_alive():
         _server_thread.join(timeout=2.0)
 
-    # 5. Stop system tray
+    # 6. Stop system tray
     try:
         stop_tray()
     except Exception as e:
@@ -135,10 +142,19 @@ def main():
     # 3. Ensure SQLite schema exists (lightweight schema check, no scan, no model preload)
     init_db()
 
-    # 4. Start show-event listener thread
+    # 4. Start incremental live indexing service
+    try:
+        from backend.indexing.service import global_indexing_service
+        global_indexing_service.is_background_mode = bool(args.background)
+        global_indexing_service.startup_delay = 45.0 if args.background else 3.0
+        global_indexing_service.start()
+    except Exception as e:
+        logger.error(f"Failed to start indexing service: {e}")
+
+    # 5. Start show-event listener thread
     _single_instance.start_listener(lambda: show_or_open(runtime_port))
 
-    # 5. Spin up Uvicorn in background daemon thread
+    # 6. Spin up Uvicorn in background daemon thread
     global _server_thread
     _server_thread = threading.Thread(target=start_api_server, args=(runtime_port,), daemon=True, name="CompassUvicornServer")
     _server_thread.start()
