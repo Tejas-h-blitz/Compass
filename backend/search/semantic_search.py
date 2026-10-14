@@ -15,8 +15,10 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 from backend.models.db import get_file_by_path
 from backend.paths import data_dir
 
-# Resolve paths
-CHROMA_DIR = os.path.join(data_dir(), "chroma")
+def get_chroma_dir() -> str:
+    return os.path.join(data_dir(), "chroma")
+
+CHROMA_DIR = get_chroma_dir()
 
 # Singleton patterns for model and ChromaDB client.
 # This prevents reloading the transformer model and re-opening database connections
@@ -24,6 +26,7 @@ CHROMA_DIR = os.path.join(data_dir(), "chroma")
 _model = None
 _chroma_client = None
 _collection = None
+_active_chroma_dir = None
 
 def get_transformer_model() -> SentenceTransformer:
     global _model
@@ -35,18 +38,20 @@ def get_transformer_model() -> SentenceTransformer:
     return _model
 
 def get_chroma_collection():
-    global _chroma_client, _collection
-    if _chroma_client is None:
-        os.makedirs(CHROMA_DIR, exist_ok=True)
+    global _chroma_client, _collection, _active_chroma_dir
+    target_dir = get_chroma_dir()
+    if _chroma_client is None or _active_chroma_dir != target_dir:
+        os.makedirs(target_dir, exist_ok=True)
         # Using ChromaDB persistent local client. This avoids hosted vector DB costs/network delays,
         # perfectly matching our single-user offline local application architecture.
-        _chroma_client = chromadb.PersistentClient(path=CHROMA_DIR)
+        _chroma_client = chromadb.PersistentClient(path=target_dir)
         # We explicitly configure the distance space as 'cosine'.
         # This bounds distance scores to [0, 2], making score normalization predictable.
         _collection = _chroma_client.get_or_create_collection(
             name="compass_files",
             metadata={"hnsw:space": "cosine"}
         )
+        _active_chroma_dir = target_dir
     return _collection
 
 def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:

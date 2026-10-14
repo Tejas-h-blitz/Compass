@@ -13,6 +13,8 @@ from backend.platform.hotkey import (
     start_hotkey_listener,
     stop_hotkey_listener
 )
+from backend.platform.known_folders import get_known_folder, get_known_folders
+from backend.platform.dialogs import pick_folder
 
 __all__ = [
     "open_file",
@@ -32,4 +34,7 @@ __all__ = [
     "parse_hotkey_string",
     "start_hotkey_listener",
     "stop_hotkey_listener",
+    "get_known_folder",
+    "get_known_folders",
+    "pick_folder",
 ]
