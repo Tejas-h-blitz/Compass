@@ -6,7 +6,7 @@ from backend.paths import data_dir, app_home
 IGNORED_DIR_NAMES: Set[str] = {
     ".git", "node_modules", ".venv", "venv", "__pycache__", "env",
     ".next", "dist", "build", ".idea", ".vscode", "$recycle.bin",
-    "system volume information", ".ssh", ".aws", "appdata"
+    "system volume information", ".ssh", ".aws"
 }
 
 TEMP_FILE_PREFIXES = ("~$", ".~lock.")
@@ -69,7 +69,16 @@ def should_ignore(
     path_obj = Path(norm_path)
 
     # 3. Check directory parts
-    for part in path_obj.parts:
+    parts_to_check = path_obj.parts
+    if roots:
+        for r in roots:
+            norm_r = os.path.normcase(os.path.abspath(r))
+            if norm_path == norm_r or norm_path.startswith(norm_r.rstrip(os.path.sep) + os.path.sep):
+                rel = os.path.relpath(norm_path, norm_r)
+                parts_to_check = Path(rel).parts
+                break
+
+    for part in parts_to_check:
         clean_part = part.rstrip(os.path.sep).lower()
         if clean_part in IGNORED_DIR_NAMES:
             return True

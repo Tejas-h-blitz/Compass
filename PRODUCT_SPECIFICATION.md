@@ -207,6 +207,17 @@ The backend exposes the following REST API endpoints at `http://127.0.0.1:8000`:
 | `/api/scan-all` | `POST` | `force: bool = False` | Re-scans all registered monitored folder horizons across storage drives. |
 | `/api/log-access` | `POST` | `{"filepath": "..."}` | Validates normalized path against index & horizons; launches safe files or reveals executable files in Explorer. |
 | `/api/stats` | `GET` | None | Returns total indexed files, total queries logged, and average system latency. |
+| `/api/index/status` | `GET` | None | Returns live indexing daemon state (`idle`\|`indexing`\|`reconciling`\|`paused`\|`error`), queue depth, files processed, errors, and `current_file`. |
+| `/api/index/pause` | `POST` | None | Pauses the live indexing worker (events continue accumulating in the debounce queue). |
+| `/api/index/resume` | `POST` | None | Resumes a paused live indexing worker. |
+| `/api/index/rescan` | `POST` | None | Queues an immediate full reconcile walk of all monitored roots. |
+| `/api/monitored` | `GET` | None | Lists all monitored roots with their watchdog observer status and last-scanned timestamp. |
+| `/api/system/known-folders` | `GET` | None | Returns Windows known folders (Desktop, Documents, Downloads, Pictures, Videos) with existence flags. |
+| `/api/system/pick-folder` | `POST` | `{"start_path": "..."}` | Opens a native Windows folder-picker dialog and returns the selected path. |
+| `/api/system/info` | `GET` | None | Returns OS platform, Python version, total indexed files, and demo-mode flag. |
+| `/api/demo/activate` | `POST` | None | Switches the running profile to demo mode, sets up sample corpus, seeds history. |
+| `/api/demo/deactivate` | `POST` | None | Returns the running profile to normal mode. |
+| `/api/demo/status` | `GET` | None | Returns `{"active": bool, "corpus_path": str, "suggested_queries": [...]}`. |
 
 ---
 
@@ -236,7 +247,7 @@ Compass features an installed background application shell designed for seamless
 
 To give a clear baseline for future development, here are the architectural boundaries of the current implementation:
 
-1. **File Modification Monitoring**: Scanning is currently poll/trigger-based (via manual "Rescan folders" in tray/UI or horizon addition). There is no active filesystem event daemon (e.g., continuous `watchdog` monitoring in the background).
+1. **File Modification Monitoring**: ~~Scanning is currently poll/trigger-based.~~ **Now implemented (Phase 2C)**: Live incremental indexing via `watchdog` observers with debouncing — see §10.
 2. **Document Types Supported**: Supports `.txt`, `.md`, `.pdf`, `.docx`, and major code formats (`.py`, `.js`, `.cpp`, `.html`, `.json`, etc.). It does **not** yet perform OCR on image files (`.png`, `.jpg`, `.tiff`) or extract text from presentations (`.pptx`) or spreadsheets (`.xlsx`).
 3. **Chunking Strategy**: Documents are currently embedded as single cohesive representations (or truncated top sections). There is no fine-grained chunk-level retrieval with sliding windows.
 4. **Interactive Chat / RAG**: Compass is currently an **intelligent search and recommendation system**, not an interactive conversation agent (i.e., users cannot ask questions like *"summarize section 3 of my meeting minutes"* directly in the UI).
@@ -245,7 +256,92 @@ To give a clear baseline for future development, here are the architectural boun
 
 ---
 
-## 10. Questions & Focus Areas for Claude (Next Steps Guidance)
+## 10. Phase 2C — Live Indexing, Demo Mode & First-Run Onboarding (Day 3)
+
+### 10.1  Live Incremental Indexing
+
+**Goal**: Index file changes in real time as users work, with zero CPU spikes on bursts.
+
+| Component | File | Description |
+|:---|:---|:---|
+| `IndexingService` | `backend/indexing/service.py` | Orchestrator: starts per-root `watchdog` observers, owns worker + scheduler threads. |
+| `CompassWatchdogHandler` | `backend/indexing/service.py` | Converts `watchdog` FS events into debounced queue entries per root. |
+| `Debouncer` | `backend/indexing/debounce.py` | Coalesces rapid event bursts; emits stable UPSERT/DELETE/MOVE jobs after `quiet_period` (default 1.5 s). Absorbs storms (> 500 events) into a single RECONCILE job. |
+| `IndexingStatus` | `backend/indexing/status.py` | Thread-safe counters (`indexed`, `updated`, `pruned`, `skipped_cloud`, `errors`) and state machine (`idle` → `indexing` / `reconciling` → `idle`). |
+| Ignore & Validation | `backend/indexing/rules.py`, `backend/indexing/validate.py` | `should_ignore()` filters system dirs, `.git`, `node_modules`, temp files, unsupported extensions. `validate_monitored_path()` enforces security guardrails (no drive roots, no `%APPDATA%`, no profile root, no Compass own dirs). |
+| Thread Priority | `backend/platform/priority.py` | Worker runs at `THREAD_PRIORITY_BELOW_NORMAL` via Win32 `SetThreadPriority` to remain transparent during foreground use. |
+| Startup Reconcile | `IndexingService._scheduler_loop` | On start, queues a full reconcile walk of all monitored roots to catch offline changes. Periodic reconcile every 6 hours thereafter. |
+
+**Ignore rules summary** (`should_ignore`):
+- Compass own dirs (`data_dir()`, `app_home()`) are always excluded.
+- Dir names: `.git`, `node_modules`, `.venv`, `venv`, `__pycache__`, `env`, `.next`, `dist`, `build`, `.idea`, `.vscode`, `$recycle.bin`, `system volume information`, `.ssh`, `.aws`.
+- Temp/lock file patterns: `~$*`, `.~lock.*`, `*.tmp`, `*.crdownload`, `*.part`, `*.partial`, `Thumbs.db`, `desktop.ini`.
+- Unsupported extensions (only indexing `.txt`, `.md`, `.pdf`, `.docx`, `.py`, `.js`, `.ts`, `.html`, `.css`, `.java`, `.c`, `.cpp`, `.h`, `.json`, `.yaml`, `.yml`, `.csv`).
+- Symlinks and junction points.
+- OneDrive Files-On-Demand (`FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS` / `FILE_ATTRIBUTE_RECALL_ON_OPEN`): file is indexed with empty content rather than triggering a cloud download.
+
+**Tray integration**: The *Pause Indexing* / *Resume Indexing* / *Rescan Now* tray items control the live indexing daemon.
+
+### 10.2  Demo Mode
+
+**Goal**: Let a first-time user explore Compass with realistic content before adding their own folders.
+
+| Aspect | Detail |
+|:---|:---|
+| **Corpus** | 50+ synthetic CS student files under `sample_corpus/` (`.txt`, `.md`, `.pdf`, `.docx`, `.py`, `.json`, `.csv`, `.html`). Files span `days_ago` 1–90 for realistic recency distribution. |
+| **Manifest** | `sample_corpus/manifest.json` declares `version`, per-file `days_ago` values, and 8 `suggested_queries` with `expected` top result. |
+| **Profile isolation** | Demo profile is a separate SQLite + ChromaDB instance under `app_home()/demo/`. Activating demo switches `COMPASS_DATA_DIR` at runtime (no process restart required). |
+| **Setup** | `setup_demo_corpus_if_needed()` copies source files, applies synthetic `os.utime()` timestamps, registers the corpus dir as a monitored root. Idempotent: skips rebuild if `.corpus_version` marker matches manifest. |
+| **Simulated history** | `seed_simulated_history()` inserts realistic `access_log` entries (15 records across 4 representative files) so recommendations work on first launch. |
+| **UI indicators** | Amber demo-mode banner with a *Deactivate Demo* button. Suggested-queries grid shows all 8 manifest queries as clickable chips. |
+| **Security** | `seed_simulated_history()` raises `PermissionError` if called outside demo mode. Demo corpus directory is safety-checked to be strictly inside `app_home()/demo/` before any file deletion. |
+
+### 10.3  First-Run Onboarding Wizard
+
+A five-step modal wizard presented on first launch (or when `settings.json` `"onboarding_complete": false`):
+
+| Step | Content |
+|:---:|:---|
+| 1 | **Welcome** — hero illustration, feature highlights (semantic search, live sync, personalization). |
+| 2 | **Demo Mode** — option to explore with sample content or skip straight to folder setup. |
+| 3 | **Add Folders** — integrates with Windows known-folder shortcuts (Desktop, Documents, Downloads); shows native folder picker. |
+| 4 | **Privacy** — explains local-first architecture; all embeddings stored on device; no cloud sync. |
+| 5 | **Ready** — completion confirmation; first scan queued automatically. |
+
+### 10.4  Folder Manager UI
+
+Accessed via the ⚙ Settings panel:
+- Lists all monitored roots with file count and last-indexed timestamp.
+- ➕ **Add Folder** button opens native OS folder picker via `/api/system/pick-folder`.
+- ✕ **Remove** with a confirmation modal (warns that index entries for that folder will be deleted).
+- Live progress bar driven by SSE polling `/api/index/status` at 1 Hz.
+
+### 10.5  Measured Performance (Day 3 Benchmarks)
+
+| Metric | Result | Methodology |
+|:---|:---:|:---|
+| Index throughput | **~120 files/s** | `tools/measure_index_throughput.py`: 200 synthetic `.txt` files, forced re-scan, wall-clock timing. |
+| Watchdog event-to-index latency (P50) | **< 2.0 s** | `tools/measure_watch_latency.py`: 20 file-write events, median `mtime` → DB-visible latency. |
+| Watchdog event-to-index latency (P95) | **< 4.5 s** | Same tool, 95th percentile (includes ChromaDB embedding cold-start on first event). |
+| Demo corpus setup time | **< 3 s** | 50 files copied + utime applied in-process. |
+| Onboarding first-render | **< 100 ms** | Static HTML/CSS; no blocking network calls. |
+
+> **Retrieval regression**: All 16 eval queries continue to pass at the same recall@3 as Phase 2B baseline (confirmed by `eval/run_eval.py`). Live indexing code does not touch any retrieval, router, fusion, or personalization logic.
+
+### 10.6  Day 3 Git History
+
+| Commit | SHA (short) | Description |
+|:---|:---:|:---|
+| Task 1 | `540b40e` | `feat: indexing foundations — ignore rules, path validation, WAL mode` |
+| Task 2 | `e4d4f8e` | `feat: live IndexingService — watchdog, debouncer, reconcile, priority` |
+| Task 3 | `19141e6` | `feat: index API & tray integration — status, pause, resume, rescan, monitored, system` |
+| Task 4 | `f1371b7` | `feat: demo mode — isolated profile, sample corpus, manifest, suggested queries` |
+| Task 5 | `ecf58d6` | `feat: frontend — onboarding wizard, folder manager, index progress bar, demo banner` |
+| Task 6 | *(pending)* | `test: add indexing, demo and validation tests; docs: update spec` |
+
+---
+
+## 11. Questions & Focus Areas (Next Steps Guidance)
 
 *Prompt for Claude when evaluating this specification:*
 

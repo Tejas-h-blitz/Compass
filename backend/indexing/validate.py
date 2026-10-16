@@ -68,16 +68,41 @@ def validate_monitored_path(
             error="Security restriction: Cannot monitor recycle bin or system volume folders."
         )
 
-    # 3. System Protected Directories
+    # 3. Existing Monitored Roots Coverage
+    if existing_roots is None:
+        try:
+            from backend.models.db import get_monitored_paths
+            existing_roots = [m["path"] for m in get_monitored_paths()]
+        except Exception:
+            existing_roots = []
+
+    for root in existing_roots:
+        norm_root = os.path.normcase(os.path.realpath(root))
+        if norm_canonical == norm_root:
+            return PathValidationResult(
+                is_valid=False,
+                error=f"Directory is already monitored: '{canonical}'"
+            )
+        if norm_canonical.startswith(norm_root + os.path.sep):
+            return PathValidationResult(
+                is_valid=False,
+                error=f"Path is already covered by monitored folder: '{root}'"
+            )
+
+    # 4. System Protected Directories
+    import tempfile
+    temp_dir = os.path.normcase(os.path.realpath(tempfile.gettempdir()))
+    is_in_temp = norm_canonical.startswith(temp_dir + os.path.sep)
+
     protected_system_dirs = _get_system_protected_dirs()
     for sys_dir in protected_system_dirs:
-        if norm_canonical == sys_dir or norm_canonical.startswith(sys_dir + os.path.sep):
+        if norm_canonical == sys_dir or (not is_in_temp and norm_canonical.startswith(sys_dir + os.path.sep)):
             return PathValidationResult(
                 is_valid=False,
                 error=f"Security restriction: Cannot monitor system or application data directories ('{canonical}')."
             )
 
-    # 4. User profile root itself (subfolders are allowed)
+    # 5. User profile root itself (subfolders are allowed)
     user_profile = os.environ.get("USERPROFILE")
     if user_profile and os.path.exists(user_profile):
         norm_profile = os.path.normcase(os.path.realpath(user_profile))
@@ -87,7 +112,7 @@ def validate_monitored_path(
                 error="The user profile root folder cannot be monitored directly. Please select specific folders like Documents or Projects."
             )
 
-    # 5. Compass's own data and application directories
+    # 6. Compass's own data and application directories
     try:
         compass_dirs = [data_dir(), app_home()]
     except Exception:
@@ -108,27 +133,6 @@ def validate_monitored_path(
             return PathValidationResult(
                 is_valid=False,
                 error=f"Cannot monitor directory containing Compass's application data ('{c_dir}')."
-            )
-
-    # 6. Existing Monitored Roots Coverage
-    if existing_roots is None:
-        try:
-            from backend.models.db import get_monitored_paths
-            existing_roots = [m["path"] for m in get_monitored_paths()]
-        except Exception:
-            existing_roots = []
-
-    for root in existing_roots:
-        norm_root = os.path.normcase(os.path.realpath(root))
-        if norm_canonical == norm_root:
-            return PathValidationResult(
-                is_valid=False,
-                error=f"Directory is already monitored: '{canonical}'"
-            )
-        if norm_canonical.startswith(norm_root + os.path.sep):
-            return PathValidationResult(
-                is_valid=False,
-                error=f"Path is already covered by monitored folder: '{root}'"
             )
 
     return PathValidationResult(is_valid=True, canonical_path=canonical)

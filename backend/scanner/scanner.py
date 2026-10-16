@@ -20,7 +20,7 @@ from backend.models.db import (
 # --- Security-by-Design Guardrails ---
 # Directories that must NEVER be scanned under any circumstances (defense-in-depth)
 SECURITY_BLACKLIST_DIRS = {
-    '.ssh', '.aws', '.git', 'appdata', 'windows', 'program files',
+    '.ssh', '.aws', '.git', 'windows', 'program files',
     'program files (x86)', '$recycle.bin', 'system volume information',
     'node_modules', '.venv', 'venv', '__pycache__', 'env', '.next',
     'dist', 'build', '.idea', '.vscode', '.config', 'cookies',

@@ -228,6 +228,25 @@ def api_estimate_monitored(req: EstimateRequest):
     """Walks the folder tree bounded to 2 seconds and 50,000 files to estimate indexable files."""
     return estimate_supported_files(req.path, time_limit=2.0, max_files=50000)
 
+@app.get("/api/recommendations", dependencies=[Depends(verify_session)])
+def api_recommendations(limit: int = 6):
+    """
+    Returns smart zero-query file recommendations based on frequency-recency decay
+    and recently modified documents.
+    """
+    try:
+        recs = get_smart_recommendations(limit=limit)
+        return {
+            "status": "success",
+            "recommendations": recs
+        }
+    except Exception as e:
+        logger.error(f"Error generating recommendations: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
 # Backwards compatibility aliases for /api/horizons
 @app.get("/api/horizons", dependencies=[Depends(verify_session)])
 def api_get_horizons():
