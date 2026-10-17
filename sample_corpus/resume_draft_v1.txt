@@ -1,0 +1,7 @@
+Draft notes for updating engineering resume:
+- Add bullet point about lowering SQLite busy timeouts in multi-threaded WAL mode.
+- Mention reciprocal rank fusion algorithm in Compass desktop search.
+- Update GPA after spring semester grade release.
+- Highlight open source contributions to watchdog and fpdf2 libraries.
+- Include link to GitHub profile and personal portfolio site.
+- Make sure contact email and phone number are formatted cleanly.

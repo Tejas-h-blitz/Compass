@@ -1,0 +1,6 @@
+Books to complete this academic year:
+1. Designing Data-Intensive Applications by Martin Kleppmann (High Priority - Chapters 5, 7, 9).
+2. Operating Systems: Three Easy Pieces by Remzi and Andrea Arpaci-Dusseau (Virtualization & Concurrency).
+3. Database Internals by Alex Petrov (LSM-trees and B-Tree storage engines).
+4. Crafting Interpreters by Robert Nystrom (Lexing, parsing, and bytecode VMs).
+5. Clean Code by Robert C. Martin (Refactoring practices and code smells).

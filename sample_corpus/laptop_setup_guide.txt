@@ -1,0 +1,7 @@
+Steps for provisioning a new Windows 11 development machine:
+1. Install Windows Terminal and PowerShell 7 from Microsoft Store.
+2. Install Git for Windows with Git Credential Manager.
+3. Install VS Code and key extensions: Python, Pylance, Prettier, ESLint, Go.
+4. Install Python 3.11 with pip and set PATH variables.
+5. Enable WSL 2 (Windows Subsystem for Linux) with Ubuntu 22.04.
+6. Configure developer folder at D:\projects to avoid OS drive bloat.

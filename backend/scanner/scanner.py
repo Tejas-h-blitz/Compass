@@ -20,7 +20,7 @@ from backend.models.db import (
 # --- Security-by-Design Guardrails ---
 # Directories that must NEVER be scanned under any circumstances (defense-in-depth)
 SECURITY_BLACKLIST_DIRS = {
-    '.ssh', '.aws', '.git', 'appdata', 'windows', 'program files',
+    '.ssh', '.aws', '.git', 'windows', 'program files',
     'program files (x86)', '$recycle.bin', 'system volume information',
     'node_modules', '.venv', 'venv', '__pycache__', 'env', '.next',
     'dist', 'build', '.idea', '.vscode', '.config', 'cookies',
@@ -172,15 +172,33 @@ def scan_file(filepath: str, force: bool = False) -> bool:
         if abs(existing_file["modified_at"] - modified_at) < 0.01:
             return False
             
-    # Extract text content
-    try:
-        content = extract_text(filepath, file_type)
-    except Exception as e:
-        logger.error(f"Failed to extract text from {filepath}: {e}")
-        return False
+    # Check OneDrive Files On-Demand attributes
+    # FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS (0x00400000) or FILE_ATTRIBUTE_RECALL_ON_OPEN (0x00040000)
+    attrs = getattr(stat, "st_file_attributes", 0)
+    is_cloud_only = bool(attrs & (0x00400000 | 0x00040000))
+    if is_cloud_only:
+        # Never read cloud-only files (reading triggers a cloud download)
+        content = ""
+        try:
+            from backend.indexing.status import global_indexing_status
+            global_indexing_status.increment("skipped_cloud")
+        except Exception:
+            pass
+        logger.info(f"Skipped cloud-only file content download for: {filename}")
+    else:
+        # Extract text content
+        extract_start = time.time()
+        try:
+            content = extract_text(filepath, file_type)
+        except Exception as e:
+            logger.error(f"Failed to extract text from {filepath}: {e}")
+            return False
+        extract_duration = time.time() - extract_start
+        if extract_duration > 10.0:
+            logger.warning(f"Text extraction took {extract_duration:.1f}s (>10s warning): '{filepath}'")
 
-    # Sanitize content: scrub API keys, tokens, and private keys before storage/embeddings
-    content = sanitize_content(content)
+        # Sanitize content: scrub API keys, tokens, and private keys before storage/embeddings
+        content = sanitize_content(content)
         
     # Save/update SQLite index
     try:

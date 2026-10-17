@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-watchdog
+watchdog==6.0.0
 pypdf
 python-docx
 sentence-transformers

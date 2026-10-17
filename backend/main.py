@@ -27,6 +27,10 @@ from backend.platform.launcher import open_file, reveal_in_folder
 from backend.security.auth import (
     SESSION_COOKIE_NAME, consume_launch_code, verify_session
 )
+from backend.indexing.status import global_indexing_status
+from backend.indexing.service import global_indexing_service
+from backend.indexing.validate import validate_monitored_path
+from backend.indexing.rules import should_ignore
 
 EXECUTABLE_BLOCKLIST = {
     ".exe", ".com", ".bat", ".cmd", ".ps1", ".psm1", ".vbs", ".vbe",
@@ -35,7 +39,7 @@ EXECUTABLE_BLOCKLIST = {
 }
 
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "testserver"}
-from backend.paths import get_runtime_port, set_runtime_port
+from backend.paths import get_runtime_port, set_runtime_port, data_dir, app_home
 
 app = FastAPI(title="Compass API", description="Personalized local search agent backend")
 
@@ -102,7 +106,128 @@ class HorizonRequest(BaseModel):
     path: str
     label: Optional[str] = None
 
+class RescanRequest(BaseModel):
+    force: bool = False
+
+class MonitoredRequest(BaseModel):
+    path: str
+    label: Optional[str] = None
+
+class MonitoredDeleteRequest(BaseModel):
+    path: str
+
+class EstimateRequest(BaseModel):
+    path: str
+
+def estimate_supported_files(directory_path: str, time_limit: float = 2.0, max_files: int = 50000) -> dict:
+    norm_path = os.path.abspath(directory_path)
+    if not os.path.exists(norm_path) or not os.path.isdir(norm_path):
+        return {"supported_files": 0, "capped": False}
+
+    import time
+    start_time = time.time()
+    count = 0
+    capped = False
+
+    try:
+        for root, dirs, files in os.walk(norm_path, followlinks=False):
+            if time.time() - start_time > time_limit:
+                capped = True
+                break
+
+            dirs[:] = [d for d in dirs if not should_ignore(os.path.join(root, d), is_dir=True)]
+
+            for f in files:
+                if time.time() - start_time > time_limit:
+                    capped = True
+                    break
+                p = os.path.join(root, f)
+                if not should_ignore(p, is_dir=False):
+                    count += 1
+                    if count >= max_files:
+                        capped = True
+                        break
+            if capped:
+                break
+    except Exception as e:
+        logger.debug(f"Error estimating files for {directory_path}: {e}")
+
+    return {"supported_files": count, "capped": capped}
+
 # 2. REST Endpoints
+
+# --- Index Status & Control APIs ---
+@app.get("/api/index/status", dependencies=[Depends(verify_session)])
+def api_index_status():
+    """Returns indexing state, queue length, counters, and per-root watching info."""
+    roots = global_indexing_service.get_monitored_roots()
+    data = global_indexing_status.to_dict()
+    data["roots"] = roots
+    return data
+
+@app.post("/api/index/pause", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(verify_session)])
+def api_index_pause():
+    """Pauses indexing worker from taking new jobs."""
+    global_indexing_service.pause()
+    return {"status": "accepted", "state": "paused"}
+
+@app.post("/api/index/resume", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(verify_session)])
+def api_index_resume():
+    """Resumes indexing worker."""
+    global_indexing_service.resume()
+    return {"status": "accepted", "state": global_indexing_status.state}
+
+@app.post("/api/index/rescan", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(verify_session)])
+def api_index_rescan(req: Optional[RescanRequest] = None):
+    """Enqueues reconcile jobs for all monitored roots."""
+    force = req.force if req else False
+    global_indexing_service.rescan(force=force)
+    return {"status": "accepted", "force": force}
+
+# --- Monitored Folder APIs ---
+@app.get("/api/monitored", dependencies=[Depends(verify_session)])
+def api_get_monitored():
+    """Returns list of monitored folders with active watcher status and file counts."""
+    return {
+        "status": "success",
+        "monitored": global_indexing_service.get_monitored_roots()
+    }
+
+@app.post("/api/monitored", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(verify_session)])
+def api_add_monitored(req: MonitoredRequest):
+    """Validates and registers a new monitored directory root, queuing initial reconcile."""
+    val = validate_monitored_path(req.path)
+    if not val.is_valid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=val.error)
+
+    canonical = val.canonical_path
+    added = global_indexing_service.add_root(canonical, req.label)
+    return {
+        "status": "accepted",
+        "canonical_path": canonical,
+        "added": added,
+        "monitored": global_indexing_service.get_monitored_roots()
+    }
+
+@app.delete("/api/monitored", dependencies=[Depends(verify_session)])
+def api_remove_monitored(req: Optional[MonitoredDeleteRequest] = None, path: Optional[str] = None):
+    """Stops observer and prunes index/access_log records for files under the specified root."""
+    target_path = req.path if (req and req.path) else path
+    if not target_path:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Path is required.")
+
+    canonical = os.path.abspath(target_path)
+    removed = global_indexing_service.remove_root(canonical)
+    return {
+        "status": "success" if removed else "not_found",
+        "monitored": global_indexing_service.get_monitored_roots()
+    }
+
+@app.post("/api/monitored/estimate", dependencies=[Depends(verify_session)])
+def api_estimate_monitored(req: EstimateRequest):
+    """Walks the folder tree bounded to 2 seconds and 50,000 files to estimate indexable files."""
+    return estimate_supported_files(req.path, time_limit=2.0, max_files=50000)
+
 @app.get("/api/recommendations", dependencies=[Depends(verify_session)])
 def api_recommendations(limit: int = 6):
     """
@@ -122,60 +247,131 @@ def api_recommendations(limit: int = 6):
             detail=str(e)
         )
 
+# Backwards compatibility aliases for /api/horizons
 @app.get("/api/horizons", dependencies=[Depends(verify_session)])
 def api_get_horizons():
-    """
-    Lists all registered monitored horizons and their file counts.
-    """
-    try:
-        return {
-            "status": "success",
-            "horizons": get_monitored_paths()
-        }
-    except Exception as e:
-        logger.error(f"Error fetching horizons: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+    return api_get_monitored()
 
 @app.post("/api/horizons", dependencies=[Depends(verify_session)])
 def api_add_horizon(req: HorizonRequest):
-    """
-    Adds a folder to monitored horizons and triggers an immediate safe scan.
-    """
-    norm_path = os.path.abspath(req.path)
-    if not os.path.exists(norm_path) or not os.path.isdir(norm_path):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail=f"Directory does not exist: {req.path}"
-        )
-    
-    if is_path_security_blacklisted(norm_path):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail="Security restriction: Cannot monitor protected system, credential, or secret directories."
-        )
-        
-    add_monitored_path(norm_path, req.label)
-    stats = scan_directory(norm_path)
+    val = validate_monitored_path(req.path)
+    if not val.is_valid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=val.error)
+    canonical = val.canonical_path
+    global_indexing_service.add_root(canonical, req.label)
     return {
         "status": "success",
-        "path": norm_path,
-        "stats": stats,
-        "horizons": get_monitored_paths()
+        "path": canonical,
+        "horizons": global_indexing_service.get_monitored_roots()
     }
 
 @app.delete("/api/horizons", dependencies=[Depends(verify_session)])
 def api_remove_horizon(path: str):
-    """
-    Removes a folder from monitored horizons and cleans up its index.
-    """
-    norm_path = os.path.abspath(path)
-    success = remove_monitored_path(norm_path)
+    return api_remove_monitored(path=path)
+
+# --- System APIs ---
+@app.get("/api/system/known-folders", dependencies=[Depends(verify_session)])
+def api_system_known_folders():
+    """Returns detected Windows known folders (Documents, Downloads, Desktop) that exist."""
+    from backend.platform.known_folders import get_known_folders
     return {
-        "status": "success" if success else "not_found",
-        "horizons": get_monitored_paths()
+        "status": "success",
+        "folders": get_known_folders()
+    }
+
+@app.post("/api/system/pick-folder", dependencies=[Depends(verify_session)])
+def api_system_pick_folder():
+    """Opens native Windows folder selection dialog and returns chosen path (or null)."""
+    from backend.platform.dialogs import pick_folder
+    chosen = pick_folder()
+    return {"chosen_path": chosen}
+
+@app.get("/api/system/info", dependencies=[Depends(verify_session)])
+def api_system_info():
+    """Returns environment information for privacy statements and UI mode displays."""
+    curr_data = os.path.normcase(os.path.realpath(data_dir()))
+    demo_data = os.path.normcase(os.path.realpath(os.path.join(app_home(), "demo")))
+    mode = "demo" if curr_data == demo_data else "normal"
+    return {
+        "mode": mode,
+        "data_dir": data_dir(),
+        "version": "0.3.0"
+    }
+
+class ModeChangeRequest(BaseModel):
+    mode: str
+
+def restart_compass_process(new_mode: str):
+    """
+    Saves new mode to settings.json, triggers graceful application shutdown,
+    and spawns a detached replacement process in the requested mode.
+    """
+    import subprocess
+    import threading
+    from backend.settings import load_settings, save_settings
+    from backend.paths import repo_root
+
+    s = load_settings()
+    s["mode"] = new_mode
+    save_settings(s)
+
+    cmd = [sys.executable, "app.py"]
+    if new_mode == "demo":
+        cmd.append("--demo")
+
+    cwd = repo_root()
+    if sys.platform == "win32":
+        DETACHED_PROCESS = 0x00000008
+        CREATE_NO_WINDOW = 0x08000000
+        flags = DETACHED_PROCESS | CREATE_NO_WINDOW
+    else:
+        flags = 0
+
+    def _do_restart():
+        time.sleep(0.4)
+        try:
+            import app as app_module
+            app_module.shutdown_application()
+        except Exception:
+            pass
+        subprocess.Popen(cmd, cwd=cwd, creationflags=flags, close_fds=True)
+        os._exit(0)
+
+    threading.Thread(target=_do_restart, daemon=True, name="CompassModeRestartWorker").start()
+
+@app.post("/api/system/mode", dependencies=[Depends(verify_session)])
+def api_system_set_mode(req: ModeChangeRequest):
+    """Switches application mode between demo and normal, restarting the process."""
+    if req.mode not in ("demo", "normal"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mode must be 'demo' or 'normal'.")
+    restart_compass_process(req.mode)
+    return {"status": "accepted", "mode": req.mode, "message": f"Switching to {req.mode} mode..."}
+
+# --- Demo Mode Specific APIs ---
+@app.post("/api/demo/simulate-history", dependencies=[Depends(verify_session)])
+def api_demo_simulate_history():
+    """Seeds simulated usage history in access_log. Returns 403 in normal mode."""
+    from backend.demo import is_demo_mode, seed_simulated_history
+    if not is_demo_mode():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Simulated history can only be loaded in Demo Mode."
+        )
+    try:
+        count = seed_simulated_history()
+        return {"status": "success", "seeded_records": count}
+    except Exception as e:
+        logger.error(f"Error seeding simulated history: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@app.get("/api/demo/suggested-queries", dependencies=[Depends(verify_session)])
+def api_demo_suggested_queries():
+    """Returns suggested queries from manifest.json to display in the demo UI panel."""
+    from backend.demo import get_demo_manifest
+    manifest = get_demo_manifest()
+    return {
+        "status": "success",
+        "suggested_queries": manifest.get("suggested_queries", [])
     }
 
 @app.post("/api/scan-all", dependencies=[Depends(verify_session)])

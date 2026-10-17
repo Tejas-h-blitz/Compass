@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <!-- Local CSS Link -->
-    <link rel="stylesheet" href="/static/index.css?v=2.3">
+    <link rel="stylesheet" href="/static/index.css?v=3.0">
 </head>
 <body>
     <div class="app-layout">
@@ -25,13 +25,13 @@
                         </svg>
                     </div>
                     <div class="brand-text">
-                        <span class="app-title">Compass</span>
-                        <span class="app-badge">Desktop Search</span>
+                        <span id="app-title-text" class="app-title">Compass</span>
+                        <span id="app-badge-text" class="app-badge">Desktop Search</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Monitored Horizons Section (Scrollable main body) -->
+            <!-- Monitored Folders Section (Scrollable main body) -->
             <div class="sidebar-main">
                 <div class="sidebar-section">
                     <div class="section-header">
@@ -42,16 +42,15 @@
                     <!-- Monitored list container -->
                     <div id="horizons-list" class="horizons-list"></div>
 
-                    <!-- Add folder input -->
-                    <div class="add-horizon-box">
-                        <input type="text" id="scan-path-input" placeholder="Add path (e.g. D:\Projects)">
-                        <button id="btn-add-horizon" class="btn-add" title="Add Folder">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                            </svg>
-                        </button>
-                    </div>
+                    <!-- Native Picker Add Folder Button -->
+                    <button id="btn-pick-add-folder" class="btn-pick-folder" title="Add folder using native file picker">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>Add Folder...</span>
+                    </button>
+                    <div id="folder-validation-error" class="folder-validation-error hidden"></div>
                 </div>
 
                 <!-- Scope & Security Card -->
@@ -75,6 +74,19 @@
                         <span class="index-panel-title">Index Engine</span>
                         <span id="index-status-pill" class="index-status-pill">Ready</span>
                     </div>
+                    
+                    <!-- Progress Bar & State -->
+                    <div class="index-progress-wrapper">
+                        <div class="index-progress-bar">
+                            <div id="index-progress-fill" class="index-progress-fill"></div>
+                        </div>
+                        <div class="index-progress-meta">
+                            <span id="index-progress-text" class="index-progress-text">Up to date</span>
+                            <button id="btn-toggle-pause" class="btn-pause-inline" title="Pause or Resume indexing">Pause</button>
+                        </div>
+                        <div id="index-error-text" class="index-error-text hidden"></div>
+                    </div>
+
                     <div class="index-metrics">
                         <span class="metric-num" id="stat-files-count">0</span>
                         <span class="metric-txt">files in database</span>
@@ -82,25 +94,16 @@
 
                     <!-- Scan Actions -->
                     <div class="scan-actions">
-                        <button id="btn-scan" class="btn-scan">
+                        <button id="btn-scan" class="btn-scan" title="Rescan monitored folders for changes">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="23 4 23 10 17 10"></polyline>
                                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                             </svg>
-                            <span>Scan Folders</span>
+                            <span>Rescan</span>
                         </button>
                         <button id="btn-scan-force" class="btn-reindex" title="Force complete re-indexing">
-                            Re-index
+                            Force Re-index
                         </button>
-                    </div>
-
-                    <!-- Status / Notification -->
-                    <div id="scan-status" class="scan-status hidden">
-                        <div class="mini-spinner"></div>
-                        <span id="scan-status-text">Scanning directories...</span>
-                    </div>
-                    <div id="scan-result" class="scan-result hidden">
-                        <span id="scan-result-details">Scanned 0 files</span>
                     </div>
                 </div>
 
@@ -108,15 +111,27 @@
                 <div class="sidebar-footer">
                     <div class="privacy-status" title="Local search engine with automatic zero-trust filtering for keys and private data">
                         <span class="status-dot"></span>
-                        <span class="privacy-label">Local & Private</span>
+                        <span id="privacy-status-label" class="privacy-label">Local & Private</span>
                     </div>
-                    <span class="version-tag">v2.0</span>
+                    <span class="version-tag">v0.3.0</span>
                 </div>
             </div>
         </aside>
 
         <!-- 2. Main Search Area -->
         <main class="main-content">
+            <!-- Persistent Demo Mode Banner -->
+            <div id="demo-mode-banner" class="demo-mode-banner hidden">
+                <div class="demo-banner-content">
+                    <span class="demo-badge">DEMO MODE</span>
+                    <span class="demo-desc">Sample CS student corpus (45 synthetic files)</span>
+                </div>
+                <div class="demo-banner-actions">
+                    <button id="btn-seed-simulated-history" class="btn-demo-action" title="Load simulated history into access log">Load Simulated History</button>
+                    <button id="btn-switch-to-normal" class="btn-demo-switch">Switch to My Files</button>
+                </div>
+            </div>
+
             <section class="search-panel">
                 <!-- Spotlight Search Bar -->
                 <div class="search-header">
@@ -153,6 +168,34 @@
 
                 <!-- Results & Recommendations View -->
                 <div class="results-container">
+                    <!-- Index In-Progress Banner -->
+                    <div id="index-building-banner" class="index-building-banner hidden">
+                        <span class="banner-pulse-dot"></span>
+                        <span>Index still building: results may be incomplete</span>
+                    </div>
+
+                    <!-- Demo Try These Panel -->
+                    <div id="demo-try-these-panel" class="demo-try-these-panel hidden">
+                        <div class="try-these-header">
+                            <span class="try-these-title">Try These Sample Queries</span>
+                            <span class="try-these-subtitle">Click any query to evaluate routing and retrieval</span>
+                        </div>
+                        <div id="demo-queries-grid" class="demo-queries-grid"></div>
+                    </div>
+
+                    <!-- Empty Monitored Folders Call-To-Action -->
+                    <div id="empty-folders-cta" class="empty-folders-cta hidden">
+                        <div class="empty-cta-icon">
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                        </div>
+                        <h3>No folders monitored yet</h3>
+                        <p>Add folders like Documents or Downloads to start searching your files locally.</p>
+                        <button id="btn-cta-add-folder" class="btn-wizard-primary" style="margin-top:14px;">Add a Folder</button>
+                    </div>
+
+                    <!-- Main Search Results List -->
                     <div id="results-list" class="results-list">
                         <!-- Initial state rendered dynamically by app.js -->
                     </div>
@@ -175,6 +218,110 @@
                 </div>
             </section>
         </main>
+    </div>
+
+    <!-- First-Run Onboarding Wizard -->
+    <div id="onboarding-overlay" class="onboarding-overlay hidden">
+        <div class="onboarding-card">
+            <!-- Step 1: Welcome & Privacy -->
+            <div id="onboarding-step-1" class="onboarding-step">
+                <div class="wizard-header">
+                    <div class="wizard-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                        </svg>
+                    </div>
+                    <h2>Welcome to Compass</h2>
+                    <p class="wizard-subtitle">Fast, local-first search across your personal files</p>
+                </div>
+                <div class="privacy-statement-box">
+                    <div class="privacy-bullet">
+                        <span class="bullet-check">✓</span>
+                        <div><strong>100% Offline & Private:</strong> Files are never uploaded to the cloud.</div>
+                    </div>
+                    <div class="privacy-bullet">
+                        <span class="bullet-check">✓</span>
+                        <div><strong>What is Stored:</strong> Filenames, extracted text, embeddings, and access history.</div>
+                    </div>
+                    <div class="privacy-bullet">
+                        <span class="bullet-check">✓</span>
+                        <div><strong>Stored Locally At:</strong> <span id="privacy-data-dir-path" class="code-path">...</span></div>
+                    </div>
+                </div>
+                <div class="wizard-actions">
+                    <button id="btn-wizard-next-to-folders" class="btn-wizard-primary">Get Started</button>
+                    <div class="wizard-secondary-links">
+                        <button id="btn-wizard-skip" class="btn-link">Skip for now</button>
+                        <span class="link-divider">·</span>
+                        <button id="btn-wizard-try-demo" class="btn-link">Try demo mode instead</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Choose Folders -->
+            <div id="onboarding-step-2" class="onboarding-step hidden">
+                <div class="wizard-header">
+                    <h2>Choose Folders to Search</h2>
+                    <p class="wizard-subtitle">Select standard folders or pick specific project directories</p>
+                </div>
+                <div id="wizard-known-folders-list" class="wizard-folders-list"></div>
+                <div class="wizard-custom-folder-row">
+                    <button id="btn-wizard-pick-custom" class="btn-wizard-pick">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        <span>Add another folder...</span>
+                    </button>
+                    <div id="wizard-validation-error" class="wizard-validation-error hidden"></div>
+                </div>
+                <div class="wizard-actions">
+                    <button id="btn-wizard-start-indexing" class="btn-wizard-primary">Index Selected Folders</button>
+                    <div class="wizard-secondary-links">
+                        <button id="btn-wizard-back-to-step1" class="btn-link">Back</button>
+                        <span class="link-divider">·</span>
+                        <button id="btn-wizard-skip-2" class="btn-link">Skip for now</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Live Indexing Progress -->
+            <div id="onboarding-step-3" class="onboarding-step hidden">
+                <div class="wizard-header">
+                    <h2>Building Your Local Index</h2>
+                    <p class="wizard-subtitle">Compass is reading metadata and vectorizing text</p>
+                </div>
+                <div class="wizard-progress-card">
+                    <div class="wizard-progress-bar-container">
+                        <div id="wizard-progress-fill" class="wizard-progress-fill"></div>
+                    </div>
+                    <div class="wizard-progress-status">
+                        <span id="wizard-progress-label">Preparing index...</span>
+                        <span id="wizard-progress-numbers">0 / 0</span>
+                    </div>
+                    <div id="wizard-current-file" class="wizard-current-file"></div>
+                </div>
+                <div class="wizard-actions">
+                    <button id="btn-wizard-finish-searching" class="btn-wizard-primary">Start Searching Now</button>
+                    <p class="wizard-note">Indexing continues in the background.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal for Removing Monitored Root -->
+    <div id="confirm-remove-overlay" class="confirm-modal-overlay hidden">
+        <div class="confirm-modal-card">
+            <h3>Remove Monitored Folder?</h3>
+            <p id="confirm-remove-folder-path" class="confirm-folder-path"></p>
+            <p class="confirm-warning-text">
+                Removing this folder will delete its index records, vector embeddings, and search access history.
+            </p>
+            <div class="confirm-actions">
+                <button id="btn-confirm-remove-cancel" class="btn-confirm-cancel">Cancel</button>
+                <button id="btn-confirm-remove-proceed" class="btn-confirm-delete">Remove Folder</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Unauthorized Session Overlay -->
     <div id="unauthorized-overlay" class="unauthorized-overlay hidden">
         <div class="unauthorized-card">
@@ -185,11 +332,11 @@
                 </svg>
             </div>
             <h2>Session Required</h2>
-            <p>Open Compass from the app window.</p>
+            <p>Open Compass from the app window or tray icon.</p>
         </div>
     </div>
 
     <!-- Local JS Link -->
-    <script src="/static/app.js?v=2.3"></script>
+    <script src="/static/app.js?v=3.0"></script>
 </body>
 </html>

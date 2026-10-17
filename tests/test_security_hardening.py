@@ -6,8 +6,11 @@ from fastapi.testclient import TestClient
 # Ensure root is in sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from backend.main import app
+import time as _time
+
 from backend.models.db import (
-    get_db_connection, add_monitored_path, get_monitored_paths
+    get_db_connection, add_monitored_path, get_monitored_paths,
+    insert_or_update_file
 )
 from backend.security.auth import (
     generate_launch_code, reset_auth_state_for_testing
@@ -15,10 +18,39 @@ from backend.security.auth import (
 
 TEST_CORPUS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "test_corpus"))
 
+# Files directly required by security tests (we only index these few to keep setup fast)
+_REQUIRED_FILES = [
+    "doc3_dummy_test.pdf",
+    "climate_data_statistical_analysis.py",
+]
+
 @pytest.fixture(autouse=True)
 def setup_auth_and_monitored():
     reset_auth_state_for_testing()
     add_monitored_path(TEST_CORPUS_DIR, "Test Corpus")
+
+    # Seed the required files directly into SQLite without triggering ChromaDB so
+    # that /api/log-access can locate them in the files table even on a fresh DB.
+    now = _time.time()
+    for fname in _REQUIRED_FILES:
+        fpath = os.path.join(TEST_CORPUS_DIR, fname)
+        if not os.path.exists(fpath):
+            continue
+        st = os.stat(fpath)
+        _, ext = os.path.splitext(fname)
+        try:
+            content = open(fpath, "r", encoding="utf-8", errors="ignore").read() if ext not in {".pdf"} else ""
+        except Exception:
+            content = ""
+        insert_or_update_file(
+            filepath=os.path.abspath(fpath),
+            filename=fname,
+            file_type=ext,
+            file_size=st.st_size,
+            created_at=st.st_ctime,
+            modified_at=st.st_mtime,
+            content=content,
+        )
     yield
 
 @pytest.fixture

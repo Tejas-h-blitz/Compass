@@ -1,0 +1,7 @@
+Study session notes on self-balancing binary search trees.
+AVL Trees: Strictly height-balanced. For every node, height of left and right subtrees differs by at most 1.
+Rotations: Left rotation, right rotation, left-right double rotation, right-left double rotation.
+Lookups are strictly O(log n) with smaller constant factors than Red-Black trees due to tighter height balance.
+Red-Black Trees: Slightly looser balance. Every node is red or black. Root is black. Red nodes cannot have red children.
+Every path from node to leaf contains same number of black nodes. Max height is 2 * log2(n + 1).
+Used extensively in Linux kernel, C++ std::map, and Java TreeMap because insertion and deletion require fewer rotations.

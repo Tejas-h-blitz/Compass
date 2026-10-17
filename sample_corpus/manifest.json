@@ -1,0 +1,546 @@
+{
+  "version": "1.0",
+  "description": "Synthetic CS-student sample corpus for Compass offline demo testing.",
+  "file_count": 45,
+  "files": [
+    {
+      "filename": "kubernetes_guide.pdf",
+      "type": "pdf",
+      "days_ago": 5,
+      "tags": [
+        "devops",
+        "cloud",
+        "kubernetes"
+      ],
+      "title": "Comprehensive Guide to Kubernetes Architecture and Deployments"
+    },
+    {
+      "filename": "spring_break_itinerary.pdf",
+      "type": "pdf",
+      "days_ago": 12,
+      "tags": [
+        "travel",
+        "personal",
+        "california"
+      ],
+      "title": "Pacific Coast Highway Spring Break Road Trip Itinerary"
+    },
+    {
+      "filename": "resume_2024.pdf",
+      "type": "pdf",
+      "days_ago": 18,
+      "tags": [
+        "career",
+        "resume"
+      ],
+      "title": "Alex Chen - Curriculum Vitae (2024 Software Engineering)"
+    },
+    {
+      "filename": "cover_letter_google.pdf",
+      "type": "pdf",
+      "days_ago": 22,
+      "tags": [
+        "career",
+        "application"
+      ],
+      "title": "Software Engineering Cover Letter - Google University Graduate"
+    },
+    {
+      "filename": "doc4.pdf",
+      "type": "pdf",
+      "days_ago": 30,
+      "tags": [
+        "distributed_systems",
+        "notes",
+        "algorithms"
+      ],
+      "title": "Clock Synchronization and Vector Clocks in Distributed Systems"
+    },
+    {
+      "filename": "operating_systems_cfs_notes.pdf",
+      "type": "pdf",
+      "days_ago": 35,
+      "tags": [
+        "os",
+        "linux",
+        "scheduling"
+      ],
+      "title": "Linux Completely Fair Scheduler (CFS) Deep Dive"
+    },
+    {
+      "filename": "distributed_transactions_2pc.pdf",
+      "type": "pdf",
+      "days_ago": 40,
+      "tags": [
+        "database",
+        "distributed_systems",
+        "consensus"
+      ],
+      "title": "Two-Phase Commit (2PC) and Consensus Protocols in Distributed Databases"
+    },
+    {
+      "filename": "compilers_ast_optimization.pdf",
+      "type": "pdf",
+      "days_ago": 45,
+      "tags": [
+        "compilers",
+        "optimization",
+        "cs"
+      ],
+      "title": "Abstract Syntax Trees and SSA Intermediate Representation"
+    },
+    {
+      "filename": "linear_algebra_svd_notes.pdf",
+      "type": "pdf",
+      "days_ago": 50,
+      "tags": [
+        "math",
+        "linear_algebra",
+        "ml"
+      ],
+      "title": "Singular Value Decomposition (SVD) and Principal Component Analysis"
+    },
+    {
+      "filename": "computer_vision_yolo_survey.pdf",
+      "type": "pdf",
+      "days_ago": 55,
+      "tags": [
+        "ai",
+        "vision",
+        "deep_learning"
+      ],
+      "title": "Evolution of Real-Time Object Detection: From YOLOv1 to Modern Detectors"
+    },
+    {
+      "filename": "security_pki_cryptography.pdf",
+      "type": "pdf",
+      "days_ago": 60,
+      "tags": [
+        "security",
+        "crypto",
+        "networks"
+      ],
+      "title": "Public Key Infrastructure (PKI) and TLS 1.3 Handshake Mechanics"
+    },
+    {
+      "filename": "database_internals_wal.pdf",
+      "type": "pdf",
+      "days_ago": 65,
+      "tags": [
+        "database",
+        "storage",
+        "wal"
+      ],
+      "title": "Write-Ahead Logging and Recovery Algorithms for ACID Guarantees"
+    },
+    {
+      "filename": "course_project_proposal.docx",
+      "type": "docx",
+      "days_ago": 8,
+      "tags": [
+        "coursework",
+        "distributed_systems",
+        "project"
+      ],
+      "title": "CS 452 Final Project Proposal: Fault-Tolerant Distributed Key-Value Store"
+    },
+    {
+      "filename": "resume_final.docx",
+      "type": "docx",
+      "days_ago": 15,
+      "tags": [
+        "career",
+        "resume"
+      ],
+      "title": "Alex Chen Resume - Full Stack & Systems Engineering"
+    },
+    {
+      "filename": "hackathon_planning.docx",
+      "type": "docx",
+      "days_ago": 20,
+      "tags": [
+        "hackathon",
+        "planning",
+        "ai"
+      ],
+      "title": "BayHacks 2024 Project Planning: Local AI Code Assistant"
+    },
+    {
+      "filename": "rest_api_design_standards.docx",
+      "type": "docx",
+      "days_ago": 25,
+      "tags": [
+        "api",
+        "backend",
+        "architecture"
+      ],
+      "title": "Engineering Standards: RESTful API Design and Error Handling"
+    },
+    {
+      "filename": "meeting_notes_capstone_sync.docx",
+      "type": "docx",
+      "days_ago": 32,
+      "tags": [
+        "notes",
+        "team",
+        "capstone"
+      ],
+      "title": "Senior Capstone Project Weekly Sync Meeting Notes"
+    },
+    {
+      "filename": "untitled_final.docx",
+      "type": "docx",
+      "days_ago": 38,
+      "tags": [
+        "ml",
+        "optimization",
+        "neural_networks"
+      ],
+      "title": "Gradient Descent Optimization Algorithms: A Comparative Study"
+    },
+    {
+      "filename": "cloud_native_microservices_architecture.docx",
+      "type": "docx",
+      "days_ago": 42,
+      "tags": [
+        "cloud",
+        "microservices",
+        "architecture"
+      ],
+      "title": "Patterns for Resilient Cloud-Native Microservices"
+    },
+    {
+      "filename": "database_sharding_and_partitioning.docx",
+      "type": "docx",
+      "days_ago": 48,
+      "tags": [
+        "database",
+        "scaling",
+        "sharding"
+      ],
+      "title": "Horizontal Database Sharding Strategies and Rebalancing"
+    },
+    {
+      "filename": "senior_thesis_outline.docx",
+      "type": "docx",
+      "days_ago": 53,
+      "tags": [
+        "academics",
+        "thesis",
+        "research"
+      ],
+      "title": "Undergraduate Senior Honors Thesis Outline: Local-First Vector Indexing"
+    },
+    {
+      "filename": "apartment_lease_notes.docx",
+      "type": "docx",
+      "days_ago": 58,
+      "tags": [
+        "personal",
+        "housing"
+      ],
+      "title": "Off-Campus Apartment Lease Agreement Notes and Checklist"
+    },
+    {
+      "filename": "database_indexing_notes.md",
+      "type": "md",
+      "days_ago": 3,
+      "tags": [
+        "database",
+        "b-trees",
+        "indexes"
+      ],
+      "title": "B-Trees, B+ Trees, and LSM-Trees: Database Indexing Fundamentals"
+    },
+    {
+      "filename": "paper_summary_transformers.md",
+      "type": "md",
+      "days_ago": 10,
+      "tags": [
+        "ai",
+        "transformers",
+        "paper_notes"
+      ],
+      "title": "Paper Summary: Attention Is All You Need (Vaswani et al. 2017)"
+    },
+    {
+      "filename": "distributed_consensus_raft_notes.md",
+      "type": "md",
+      "days_ago": 16,
+      "tags": [
+        "distributed_systems",
+        "raft",
+        "consensus"
+      ],
+      "title": "Understanding the Raft Consensus Protocol"
+    },
+    {
+      "filename": "docker_cheat_sheet.md",
+      "type": "md",
+      "days_ago": 24,
+      "tags": [
+        "devops",
+        "docker",
+        "containers"
+      ],
+      "title": "Docker and Container Runtime Practical Reference Sheet"
+    },
+    {
+      "filename": "git_workflow_standards.md",
+      "type": "md",
+      "days_ago": 28,
+      "tags": [
+        "git",
+        "workflow",
+        "collaboration"
+      ],
+      "title": "Team Git Branching Strategy and Conventional Commits"
+    },
+    {
+      "filename": "networking_tcp_ip_fundamentals.md",
+      "type": "md",
+      "days_ago": 36,
+      "tags": [
+        "networking",
+        "tcp",
+        "protocols"
+      ],
+      "title": "TCP/IP Transport Layer: Flow Control, Congestion Control, and Handshakes"
+    },
+    {
+      "filename": "machine_learning_feature_engineering.md",
+      "type": "md",
+      "days_ago": 44,
+      "tags": [
+        "ml",
+        "data",
+        "features"
+      ],
+      "title": "Practical Feature Engineering Techniques for Tabular Data"
+    },
+    {
+      "filename": "cybersecurity_owasp_top10.md",
+      "type": "md",
+      "days_ago": 52,
+      "tags": [
+        "security",
+        "owasp",
+        "web"
+      ],
+      "title": "OWASP Top 10 Web Application Security Vulnerabilities"
+    },
+    {
+      "filename": "notes_misc.txt",
+      "type": "txt",
+      "days_ago": 4,
+      "tags": [
+        "algorithms",
+        "notes",
+        "data_structures"
+      ],
+      "title": "Miscellaneous CS Study Notes on Tree Balancing"
+    },
+    {
+      "filename": "healthy_meal_prep.txt",
+      "type": "txt",
+      "days_ago": 11,
+      "tags": [
+        "recipes",
+        "cooking",
+        "personal"
+      ],
+      "title": "Budget Student Meal Prep and Quick Recipes"
+    },
+    {
+      "filename": "resume_draft_v1.txt",
+      "type": "txt",
+      "days_ago": 26,
+      "tags": [
+        "career",
+        "resume"
+      ],
+      "title": "Alex Chen Resume Draft Scratchpad"
+    },
+    {
+      "filename": "laptop_setup_guide.txt",
+      "type": "txt",
+      "days_ago": 34,
+      "tags": [
+        "setup",
+        "tools",
+        "windows"
+      ],
+      "title": "Fresh Windows Dev Environment Setup Instructions"
+    },
+    {
+      "filename": "reading_list_2024.txt",
+      "type": "txt",
+      "days_ago": 41,
+      "tags": [
+        "books",
+        "reading",
+        "personal"
+      ],
+      "title": "Computer Science and Technical Books Reading List"
+    },
+    {
+      "filename": "workout_routine_calisthenics.txt",
+      "type": "txt",
+      "days_ago": 49,
+      "tags": [
+        "fitness",
+        "personal",
+        "health"
+      ],
+      "title": "Weekly Student Calisthenics and Cardio Routine"
+    },
+    {
+      "filename": "benchmark_cache.py",
+      "type": "code",
+      "days_ago": 7,
+      "tags": [
+        "python",
+        "code",
+        "cache"
+      ],
+      "title": "LRU and LFU Cache Benchmark Simulation Script"
+    },
+    {
+      "filename": "debounce_helper.js",
+      "type": "code",
+      "days_ago": 14,
+      "tags": [
+        "javascript",
+        "frontend",
+        "utility"
+      ],
+      "title": "JavaScript Frontend Input Debounce and Throttle Utility"
+    },
+    {
+      "filename": "memory_allocator.c",
+      "type": "code",
+      "days_ago": 21,
+      "tags": [
+        "c",
+        "systems",
+        "memory"
+      ],
+      "title": "Simple C First-Fit Dynamic Memory Allocator"
+    },
+    {
+      "filename": "schema_migrations.sql",
+      "type": "code",
+      "days_ago": 29,
+      "tags": [
+        "sql",
+        "database",
+        "schema"
+      ],
+      "title": "PostgreSQL User Access and Telemetry Schema"
+    },
+    {
+      "filename": "app_config.json",
+      "type": "code",
+      "days_ago": 37,
+      "tags": [
+        "json",
+        "config",
+        "settings"
+      ],
+      "title": "Development Environment Configuration Settings"
+    },
+    {
+      "filename": "student_budget_2024.csv",
+      "type": "csv",
+      "days_ago": 6,
+      "tags": [
+        "budget",
+        "finance",
+        "student"
+      ],
+      "title": "Monthly Student Living Expenses Breakdown (2024)"
+    },
+    {
+      "filename": "class_schedule_fall.csv",
+      "type": "csv",
+      "days_ago": 23,
+      "tags": [
+        "academics",
+        "schedule"
+      ],
+      "title": "Fall Semester Academic Course Timetable"
+    },
+    {
+      "filename": "portfolio_homepage.html",
+      "type": "html",
+      "days_ago": 27,
+      "tags": [
+        "portfolio",
+        "web",
+        "html"
+      ],
+      "title": "Alex Chen Personal Developer Portfolio Webpage"
+    },
+    {
+      "filename": "api_documentation_preview.html",
+      "type": "html",
+      "days_ago": 39,
+      "tags": [
+        "api",
+        "docs",
+        "html"
+      ],
+      "title": "Internal Telemetry API Documentation Static Preview"
+    }
+  ],
+  "suggested_queries": [
+    {
+      "query": "kubernetes_guide.pdf",
+      "expected": "kubernetes_guide.pdf",
+      "strategy": "keyword",
+      "description": "Exact filename search routing directly to keyword retrieval"
+    },
+    {
+      "query": "b-trees indexing",
+      "expected": "database_indexing_notes.md",
+      "strategy": "keyword",
+      "description": "Short 2-word technical keyword search"
+    },
+    {
+      "query": "something about vector clocks",
+      "expected": "doc4.pdf",
+      "strategy": "semantic",
+      "description": "Semantic query matching conceptual vector clock notes despite opaque filename"
+    },
+    {
+      "query": "details about meal prep recipes",
+      "expected": "healthy_meal_prep.txt",
+      "strategy": "semantic",
+      "description": "Descriptive natural language query matching culinary instructions"
+    },
+    {
+      "query": "looking for transformer paper notes",
+      "expected": "paper_summary_transformers.md",
+      "strategy": "semantic",
+      "description": "Concept query retrieving self-attention research paper summary"
+    },
+    {
+      "query": "distributed key value store architecture proposal",
+      "expected": "course_project_proposal.docx",
+      "strategy": "hybrid",
+      "description": "Multi-word hybrid search fusing keyword terms with vector similarity"
+    },
+    {
+      "query": "spring break road trip itinerary",
+      "expected": "spring_break_itinerary.pdf",
+      "strategy": "hybrid",
+      "description": "Multi-word query retrieving California coastal travel schedule"
+    },
+    {
+      "query": "monthly student living expenses breakdown",
+      "expected": "student_budget_2024.csv",
+      "strategy": "hybrid",
+      "description": "Hybrid query matching financial spreadsheet categories and amounts"
+    }
+  ]
+}

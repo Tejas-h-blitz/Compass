@@ -5,21 +5,30 @@ import time
 
 from backend.paths import data_dir
 
-# Resolve the database path using backend.paths as single source of truth.
-DB_DIR = data_dir()
-DB_PATH = os.path.join(DB_DIR, "compass.db")
+# Resolve the database path dynamically using backend.paths as single source of truth.
+def get_db_dir() -> str:
+    return data_dir()
+
+def get_db_path() -> str:
+    return os.path.join(data_dir(), "compass.db")
+
+DB_DIR = get_db_dir()
+DB_PATH = get_db_path()
 
 def get_db_connection() -> sqlite3.Connection:
     """
     Creates and returns a connection to the SQLite database.
-    Enables FTS5 check and returns connection.
+    Enables FTS5 check, sets WAL journal mode, and configures a 5000ms busy timeout.
     """
-    os.makedirs(DB_DIR, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    curr_dir = get_db_dir()
+    os.makedirs(curr_dir, exist_ok=True)
+    conn = sqlite3.connect(get_db_path())
     # Enable foreign keys just in case we need referential integrity later
     conn.execute("PRAGMA foreign_keys = ON;")
     # Set journal mode to WAL for concurrency (good practice for local desktop apps)
     conn.execute("PRAGMA journal_mode = WAL;")
+    # Set busy timeout to 5000ms for concurrent write safety across threads
+    conn.execute("PRAGMA busy_timeout = 5000;")
     return conn
 
 def init_db():
@@ -373,6 +382,68 @@ def prune_files_under_path(dir_path: str) -> int:
             except Exception:
                 pass
         return len(paths)
+    finally:
+        conn.close()
+
+def rename_file_in_access_log(old_path: str, new_path: str) -> int:
+    """
+    Rewrites access_log.filepath from old_path to new_path so personalization history survives renames/moves.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    norm_old = os.path.abspath(old_path)
+    norm_new = os.path.abspath(new_path)
+    try:
+        cursor.execute("UPDATE access_log SET filepath = ? WHERE filepath = ?", (norm_new, norm_old))
+        updated = cursor.rowcount
+        conn.commit()
+        return updated
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+def prune_monitored_root_data(root_path: str, remaining_roots: Optional[List[str]] = None) -> int:
+    """
+    Prunes index rows, Chroma embeddings, and access_log rows for all files under root_path
+    that are not covered by any remaining monitored roots.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    norm_root = os.path.abspath(root_path)
+    sep = os.path.sep
+    prefix = norm_root if norm_root.endswith(sep) else norm_root + sep
+
+    if remaining_roots is None:
+        cursor.execute("SELECT path FROM monitored_paths WHERE path != ?", (norm_root,))
+        remaining_roots = [r[0] for r in cursor.fetchall()]
+
+    norm_remaining = [os.path.abspath(r) for r in remaining_roots]
+
+    try:
+        cursor.execute("SELECT filepath FROM files WHERE filepath LIKE ? OR filepath = ?", (prefix + "%", norm_root))
+        paths = [r[0] for r in cursor.fetchall()]
+        pruned_count = 0
+        for p in paths:
+            # Check if covered by another root
+            is_covered = False
+            for rem in norm_remaining:
+                rem_prefix = rem if rem.endswith(sep) else rem + sep
+                if p == rem or p.startswith(rem_prefix):
+                    is_covered = True
+                    break
+            if not is_covered:
+                delete_file(p)
+                try:
+                    from backend.search.semantic_search import delete_file_embeddings
+                    delete_file_embeddings(p)
+                except Exception:
+                    pass
+                cursor.execute("DELETE FROM access_log WHERE filepath = ?", (p,))
+                pruned_count += 1
+        conn.commit()
+        return pruned_count
     finally:
         conn.close()
 
